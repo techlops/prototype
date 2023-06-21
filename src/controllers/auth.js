@@ -69,6 +69,8 @@ export const registerLaunderer = async (params) => {
 
   const addLaunderer = await launderersModel.create(laundererObj);
 
+  console.log(addLaunderer);
+
   return {
     addLaunderer
   }
