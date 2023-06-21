@@ -21,7 +21,7 @@ router.post(
   )
 
   router.post(
-    "/registerLaunderer",
+    "/registerLassunderer",
     asyncHandler(async (req, res) => {
       const { email, password, firstName, lastName, phone, location } = req.body;
       const args = {
