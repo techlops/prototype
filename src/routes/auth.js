@@ -5,7 +5,7 @@ import * as authController from "../controllers/auth.js";
 const router = express.Router();
 
 router.post(
-  "/register",
+  "/registerUser",
   asyncHandler(async (req, res) => {
     const { email, password, firstName, lastName, phone } = req.body;
     const args = {
@@ -19,6 +19,23 @@ router.post(
     res.json(response);
   })
   )
+
+  router.post(
+    "/registerLaunderer",
+    asyncHandler(async (req, res) => {
+      const { email, password, firstName, lastName, phone, location } = req.body;
+      const args = {
+        email,
+        password,
+        firstName,
+        lastName, 
+        phone,
+        location
+      };
+      const response = await authController.registerLaunderer(args);
+      res.json(response);
+    })
+    )
 
   router.post(
     "/login",

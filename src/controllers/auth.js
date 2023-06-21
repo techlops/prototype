@@ -37,6 +37,43 @@ export const registerUser = async (params) => {
   };
 };
 
+export const registerLaunderer = async (params) => {
+  const {email, password, phone, location, firstName, lastName, service} = params
+
+  const userExists = await usersModel.findOne({ email });
+
+  if (userExists) {
+    return {
+      success: false,
+      message: 'Email already exists',
+    };
+  }
+
+  const newUser = {
+    email,
+    password,
+    firstName,
+    lastName,
+    phone,
+    location
+  };
+
+  const savedUser = await usersModel.create(newUser);
+
+  const laundererObj = {};
+
+  if(savedUser._id){
+    laundererObj.user = savedUser._id
+  }
+  
+
+  const addLaunderer = await launderersModel.create(laundererObj);
+
+  return {
+    addLaunderer
+  }
+}
+
 export const login = async (params) => {
   const { email, password } = params;
 
