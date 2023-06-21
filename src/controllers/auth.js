@@ -1,31 +1,46 @@
 import models from "../models/index.js";
 import bcrypt from "bcryptjs";
-import  TwilioManager from "../utils/twilio-manager.js";
+import otpGenerator from "otp-generator";
+import { isValidObjectId, Types } from "mongoose";
+import { getUserDetails } from "./launderer.js";
+
+const { ObjectId } = Types;
+
+// import  TwilioManager from "../utils/twilio-manager.js";
 
 // importing models
 const { usersModel } = models;
 
-
 export const registerUser = async (params) => {
-  const { email, password, name, phone } = params;
+  const { email, password, firstName, lastName, phone } = params;
   const userExists = await usersModel.findOne({ email });
 
   if (userExists) {
     return {
       success: false,
-      message: 'Email already exists',
+      message: "Email already exists",
     };
   }
 
   // Encrypt the password
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  // Generate a random OTP
+  const otp = otpGenerator.generate(6, {
+    digits: true,
+    upperCase: false,
+    specialChars: false,
+  });
+
   // Create a new user
   const newUser = {
     email,
     password: hashedPassword,
-    name,
-    phone
+    firstName,
+    lastName,
+    phone,
+    otp,
+    isCustomer: true,
   };
 
   // Save new user to the database
@@ -33,19 +48,23 @@ export const registerUser = async (params) => {
 
   return {
     success: true,
-    data: savedUser,
+    data: {
+      user: {  _id: savedUser._id,
+        ...savedUser._doc}
+    },
   };
 };
 
 export const registerLaunderer = async (params) => {
-  const {email, password, phone, location, firstName, lastName, service} = params
+  const { email, password, phone, location, firstName, lastName, service } =
+    params;
 
   const userExists = await usersModel.findOne({ email });
 
   if (userExists) {
     return {
       success: false,
-      message: 'Email already exists',
+      message: "Email already exists",
     };
   }
 
@@ -55,26 +74,53 @@ export const registerLaunderer = async (params) => {
     firstName,
     lastName,
     phone,
-    location
+    location,
   };
 
   const savedUser = await usersModel.create(newUser);
 
   const laundererObj = {};
 
-  if(savedUser._id){
-    laundererObj.user = savedUser._id
+  if (savedUser._id) {
+    laundererObj.user = savedUser._id;
   }
-  
 
   const addLaunderer = await launderersModel.create(laundererObj);
 
   console.log(addLaunderer);
 
   return {
-    addLaunderer
+    addLaunderer,
+  };
+};
+
+export const sendAgainOTP = async (params) => {
+  // 1. check is userId exists
+  // 2. generate a new OTP and update that in the database of that user
+  // 3. send that new OTP in response
+
+  const { user } = params;
+
+  const newOTP = otpGenerator.generate(6, {
+    digits: true,
+    upperCase: false,
+    specialChars: false,
+  });
+
+  const updatedUser = await usersModel.findOneAndUpdate(
+    { _id: user },
+    { $set: { otp: newOTP } },
+    { new: true, projection: { otp: 1 } }
+  );
+
+
+  return{
+    success: true,
+    updatedUser
   }
-}
+
+
+};
 
 export const login = async (params) => {
   const { email, password } = params;
@@ -84,7 +130,7 @@ export const login = async (params) => {
   if (!user) {
     return {
       success: false,
-      message: 'User not found',
+      message: "User not found",
     };
   }
 
@@ -94,7 +140,7 @@ export const login = async (params) => {
   if (!isPasswordValid) {
     return {
       success: false,
-      message: 'Invalid password',
+      message: "Invalid password",
     };
   }
 
@@ -105,19 +151,40 @@ export const login = async (params) => {
   };
 };
 
-export const verifyOTP = (inputOTP, expectedOTP) => {
-  if (inputOTP === expectedOTP){
+export const verifyOTP = async (params) => {
+  // 1. recieve OTP and userId from frontend
+  // 2. check if userId exists
+  // 3. check if OTP from frontend matches OTP stored in the document of that user
+  // return success if matches, else return fals with message "invalid OTP"
+
+  const {otp, user} = params;
+
+  const userId = ObjectId(user);
+
+  console.log(user)
+  console.log(userId)
+
+
+
+  const checkUser = await usersModel.findOne({ _id: user });
+
+  if (!checkUser) {
     return {
-      success: true
-    }
-  }
-  else{
-    return{
       success: false,
-      message: 'Ivalid OTP'
-    }
+      message: 'User not found',
+    };
   }
+
+  if (checkUser.otp !== otp) {
+    return {
+      success: false,
+      message: 'Invalid OTP',
+    };
+  }
+
+  return {
+    success: true,
+    message: 'OTP verified successfully',
+  };
+
 };
-
-
-
