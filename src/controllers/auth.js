@@ -9,10 +9,19 @@ const { ObjectId } = Types;
 // import  TwilioManager from "../utils/twilio-manager.js";
 
 // importing models
-const { usersModel } = models;
+const { usersModel, launderersModel } = models;
 
 export const registerUser = async (params) => {
-  const { email, password, firstName, lastName, phone } = params;
+  const {
+    email,
+    password,
+    firstName,
+    lastName,
+    phone,
+    image,
+    coordinates,
+    address
+  } = params;
   const userExists = await usersModel.findOne({ email });
 
   if (userExists) {
@@ -40,8 +49,22 @@ export const registerUser = async (params) => {
     lastName,
     phone,
     otp,
+    address,
     isCustomer: true,
   };
+
+  if (image) {
+    newUser.image = {
+      path: image,
+    };
+  }
+
+  if (coordinates) {
+    console.log(coordinates);
+    newUser.location = {
+      coordinates: coordinates,
+    };
+  }
 
   // Save new user to the database
   const savedUser = await usersModel.create(newUser);
@@ -49,15 +72,23 @@ export const registerUser = async (params) => {
   return {
     success: true,
     data: {
-      user: {  _id: savedUser._id,
-        ...savedUser._doc}
+      user: { _id: savedUser._id, ...savedUser._doc },
     },
   };
 };
 
 export const registerLaunderer = async (params) => {
-  const { email, password, phone, location, firstName, lastName, service } =
-    params;
+  const {
+    email,
+    password,
+    phone,
+    firstName,
+    lastName,
+    service,
+    image,
+    coordinates,
+    address
+  } = params;
 
   const userExists = await usersModel.findOne({ email });
 
@@ -68,14 +99,40 @@ export const registerLaunderer = async (params) => {
     };
   }
 
+    // Encrypt the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Generate a random OTP
+    const otp = otpGenerator.generate(6, {
+      digits: true,
+      upperCase: false,
+      specialChars: false,
+    });
+
+  // Create a new user
   const newUser = {
     email,
-    password,
+    password: hashedPassword,
     firstName,
     lastName,
     phone,
-    location,
+    otp,
+    address,
+    isLaunderer: true,
   };
+
+  if (image) {
+    newUser.image = {
+      path: image,
+    };
+  }
+
+  if (coordinates) {
+    console.log(coordinates);
+    newUser.location = {
+      coordinates: coordinates,
+    };
+  }
 
   const savedUser = await usersModel.create(newUser);
 
@@ -113,13 +170,10 @@ export const sendAgainOTP = async (params) => {
     { new: true, projection: { otp: 1 } }
   );
 
-
-  return{
+  return {
     success: true,
-    updatedUser
-  }
-
-
+    updatedUser,
+  };
 };
 
 export const login = async (params) => {
@@ -157,34 +211,31 @@ export const verifyOTP = async (params) => {
   // 3. check if OTP from frontend matches OTP stored in the document of that user
   // return success if matches, else return fals with message "invalid OTP"
 
-  const {otp, user} = params;
+  const { otp, user } = params;
 
   const userId = ObjectId(user);
 
-  console.log(user)
-  console.log(userId)
-
-
+  console.log(user);
+  console.log(userId);
 
   const checkUser = await usersModel.findOne({ _id: user });
 
   if (!checkUser) {
     return {
       success: false,
-      message: 'User not found',
+      message: "User not found",
     };
   }
 
   if (checkUser.otp !== otp) {
     return {
       success: false,
-      message: 'Invalid OTP',
+      message: "Invalid OTP",
     };
   }
 
   return {
     success: true,
-    message: 'OTP verified successfully',
+    message: "OTP verified successfully",
   };
-
 };

@@ -1,20 +1,35 @@
 import express from "express";
 import { asyncHandler } from "../middlewares/async-handler.js";
 import * as authController from "../controllers/auth.js";
+import directories from "../configs/directories.js";
+import { upload } from "../middlewares/uploader.js";
+
+const { IMAGES_DIRECTORY } = directories;
 
 const router = express.Router();
 
+
 router.post(
   "/registerUser",
+  upload(IMAGES_DIRECTORY).single("image"),
   asyncHandler(async (req, res) => {
-    const { email, password, firstName, lastName, phone } = req.body;
+    const { email, password, firstName, lastName, phone, phoneCode, coordinates } = req.body;
+
+    // Get the uploaded image path
+    const imagePath = req.file ? req.file.path : null;
+
     const args = {
       email,
       password,
       firstName,
       lastName,
       phone,
+      phoneCode,
+      image: imagePath, // Assign the image path to the "image" field
+      coordinates
+
     };
+
     const response = await authController.registerUser(args);
     res.json(response);
   })
@@ -23,14 +38,21 @@ router.post(
 router.post(
   "/registerLaunderer",
   asyncHandler(async (req, res) => {
-    const { email, password, firstName, lastName, phone, location } = req.body;
+    const { email, password, firstName, lastName, phone, phoneCode, coordinates } = req.body;
+
+    // Get the uploaded image path
+    const imagePath = req.file ? req.file.path : null;
+
     const args = {
       email,
       password,
       firstName,
       lastName,
       phone,
-      location,
+      phoneCode,
+      image: imagePath, // Assign the image path to the "image" field
+      coordinates
+
     };
     const response = await authController.registerLaunderer(args);
     res.json(response);
