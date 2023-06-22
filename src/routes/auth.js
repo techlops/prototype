@@ -13,7 +13,7 @@ router.post(
   "/registerUser",
   upload(IMAGES_DIRECTORY).single("image"),
   asyncHandler(async (req, res) => {
-    const { email, password, firstName, lastName, phone, phoneCode, coordinates } = req.body;
+    const { email, password, firstName, lastName, phone, phoneCode, coordinates, address } = req.body;
 
     // Get the uploaded image path
     const imagePath = req.file ? req.file.path : null;
@@ -26,7 +26,8 @@ router.post(
       phone,
       phoneCode,
       image: imagePath, // Assign the image path to the "image" field
-      coordinates
+      coordinates,
+      address
 
     };
 
@@ -38,7 +39,7 @@ router.post(
 router.post(
   "/registerLaunderer",
   asyncHandler(async (req, res) => {
-    const { email, password, firstName, lastName, phone, phoneCode, coordinates } = req.body;
+    const { email, password, firstName, lastName, phone, phoneCode, coordinates, address } = req.body;
 
     // Get the uploaded image path
     const imagePath = req.file ? req.file.path : null;
@@ -51,7 +52,8 @@ router.post(
       phone,
       phoneCode,
       image: imagePath, // Assign the image path to the "image" field
-      coordinates
+      coordinates,
+      address
 
     };
     const response = await authController.registerLaunderer(args);
