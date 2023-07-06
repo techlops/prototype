@@ -13,20 +13,27 @@ const { paymentAccountsModel, usersModel } = models;
  * @returns {Object} paymentAccount data
  */
 export const addPaymentAccount = async (params) => {
-  const { user, account, type } = params;
-  const paymentAccountObj = {};
 
-  if (user);
-  else throw new Error("Please enter user id!|||400");
-  if (isValidObjectId(user));
-  else throw new Error("Please enter valid user id!|||400");
-  if (await usersModel.exists({ _id: user })) paymentAccountObj.user = user;
-  else throw new Error("user not found!|||404");
-  if (account) paymentAccountObj.account = account;
-  if (type) paymentAccountObj.type = type;
+  console.log("params in addPaymentMethod",params);
+  const { user } = params;
+  console.log("successsssss 1212121212")
+  console.log("user in addPaymentMethod", user);
+  return{
+    message: "auth working" 
+  }
+  // const { user, account } = params;
+  // const paymentAccountObj = {};
 
-  const paymentAccount = await paymentAccountsModel.create(paymentAccountObj);
-  return { success: true, data: paymentAccount };
+  // if (user);
+  // else throw new Error("Please enter user id!|||400");
+  // if (isValidObjectId(user));
+  // else throw new Error("Please enter valid user id!|||400");
+  // if (await usersModel.exists({ _id: user })) paymentAccountObj.user = user;
+  // else throw new Error("user not found!|||404");
+  // if (account) paymentAccountObj.account = account;
+
+  // const paymentAccount = await paymentAccountsModel.create(paymentAccountObj);
+  // return { success: true, data: paymentAccount };
 };
 
 /**

@@ -86,12 +86,12 @@ const orderSchema = new Schema(
     },
     orderSubStepTime: {
       type: Date,
-      required: true
+      // required: true
     },
-    bags: [
+    orderBags: [
       {
         type: Schema.Types.ObjectId,
-        ref: "bag", // Reference the "bag" model
+        ref: "orderBags", // Reference the "bag" model
         required: true
       },
     ],
@@ -176,5 +176,8 @@ const orderSchema = new Schema(
   }
 
 );
+
+orderSchema.index({ customLocation: "2dsphere" });
+
 
 export default model("orders", orderSchema);

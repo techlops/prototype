@@ -18,6 +18,21 @@ const { usersModel, customersModel, adminsModel } = models;
  * @param {String} type user type
  * @returns {Object} user data
  */
+export const myProfile = async (params) => {
+
+  console.log("")
+  const { user } = params;
+    
+  const userExists = await usersModel.findOne({user});
+  if (userExists){
+    return{
+      success: true,
+      userExists
+    }
+  }
+}
+
+
 export const addUser = async (params) => {
   const { email, password, phone, type } = params;
   const userObj = {};

@@ -9,13 +9,13 @@ import * as usersController from "../controllers/users.js";
 import directories from "../configs/directories.js";
 // import { upload } from "../middlewares/uploader.js";
 import { asyncHandler } from "../middlewares/async-handler.js";
-// import {
-//   verifyOTP,
-//   verifyToken,
-//   verifyUser,
-//   verifyAdmin,
-//   verifyUserToken,
-// } from "../middlewares/authenticator.js";
+import {
+  verifyOTP,
+  verifyToken,
+  verifyUser,
+  verifyAdmin,
+  verifyUserToken,
+} from "../middlewares/authenticator.js";
 
 // destructuring assignments
 const { IMAGES_DIRECTORY } = directories;
@@ -24,11 +24,12 @@ const { IMAGES_DIRECTORY } = directories;
 const router = express.Router();
 
 router.get(
-  "/:user",
+  "/my-profile",
+  verifyToken,
   asyncHandler(async (req, res) => {
     const { user } = req.params;
     const args = { user };
-    const response = await usersController.getUser(args);
+    const response = await usersController.myProfile(args);
     res.json(response);
   })
 );

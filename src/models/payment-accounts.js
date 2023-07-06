@@ -22,12 +22,6 @@ const paymentAccountSchema = new Schema(
       type: Object,
       required: true,
     },
-    type: {
-      type: String,
-      enum: [STRIPE_ACCOUNT, STRIPE_CUSTOMER],
-      required: true,
-      index: true,
-    },
     isDefault: {
       type: Boolean,
     },

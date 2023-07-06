@@ -23,12 +23,12 @@ const ImageSchema = new Schema(
   { timestamps: true }
 );
 
-const bagSchema = new Schema(
+const orderBagSchema = new Schema(
   {
     order: {
       type: Schema.Types.ObjectId,
       ref: "orders",
-      required: true,
+      // required: true,
       index: true,
     },
     spinSettings: {
@@ -39,10 +39,10 @@ const bagSchema = new Schema(
     bagSize: {
       type: Schema.Types.ObjectId,
       ref: "bagSizes",
-      required: true,
+      // required: true,
       index: true,
     },
-    temperature: {
+    temperatureSettings: {
       type: String,
       enum: [COLD, HOT, WARM],
       required: true,
@@ -54,4 +54,4 @@ const bagSchema = new Schema(
   }
 );
 
-export default model("bags", bagSchema)
+export default model("orderBags", orderBagSchema)

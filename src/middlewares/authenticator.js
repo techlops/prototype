@@ -1,5 +1,11 @@
 // module imports
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
+
+
+import { isValidObjectId, Types } from "mongoose";
+
+const { ObjectId } = Types;
 
 // file imports
 import { asyncHandler } from "./async-handler.js";
@@ -21,49 +27,68 @@ const { CUSTOMER, ADMIN, SUPER_ADMIN } = USER_TYPES;
  * @param {string | boolean } variable any variable
  * @returns {Object} JWT token
  */
-export const getToken = function (params) {
-  return jwt.sign(params, process.env.JWT_SECRET);
+export const getToken = function (user, otp) {
+
+
+  return jwt.sign({ id: user, otp: otp }, process.env.JWT_SECRET);
 };
 
 export const verifyToken = async (
   req,
   res,
-  next,
-  shouldReturnUserOnFailure = false
+  next
+  // shouldReturnUserOnFailure = false
 ) => {
   try {
-    const token =
-      (req.headers.authorization &&
-        req.headers.authorization.split("Bearer")[1]) ||
-      (req.signedCookies && req.signedCookies.jwt) ||
-      (req.cookies && req.cookies.jwt);
+    let token = req.headers.authorization;
     if (token) {
-      const verificationObject = jwt.verify(token.trim(), JWT_SECRET);
+      token = token.split(" ")[1];
+      let checkToken = jwt.verify(token, JWT_SECRET);
 
-      if (verificationObject.shouldValidateOTP) {
-        req.user = verificationObject;
-        return next();
-      }
-      const user = await usersModel
-        .findOne({ _id: verificationObject._id })
-        .select("-createdAt -updatedAt -__v -fcms");
-      if (user) {
-        if (user.status === DELETED)
-          next(new Error("User account deleted!|||403"));
+      const user = checkToken.id;
+
+      const userExists = await usersModel.findOne({_id: user });
+      if (!userExists) {
+        next(new Error("Invalid token!|||403"));
+      } else {
         req.user = user;
         return next();
       }
     }
-    if (shouldReturnUserOnFailure) {
-      req.user = null;
-      return next();
+    else if(!token){
+      return next(new Error("No authentication token!|||401"));
     }
-    next(new Error("Invalid token!|||403"));
+
+    // const token =
+    //   (req.headers.authorization &&
+    //     req.headers.authorization.split("Bearer")[1]) ||
+    //   (req.signedCookies && req.signedCookies.jwt) ||
+    //   (req.cookies && req.cookies.jwt);
+    // if (token) {
+    //   const verificationObject = jwt.verify(token.trim(), JWT_SECRET);
+    //   req.user = verificationObject.id
+    //   console.log("hereeeee", verificationObject.id);
+
+    //   if (verificationObject.shouldValidateOTP) {
+    //     req.user = verificationObject;
+    //     return next();
+    //   }
+    //   const user = await usersModel
+    //     .findOne({ _id: verificationObject._id })
+    //     .select("-createdAt -updatedAt -__v -fcms");
+    //   if (user) {
+    //     if (user.status === DELETED)
+    //       next(new Error("User account deleted!|||403"));
+    //     req.user = user;
+    //     return next();
+    //   }
+    // }
+    // if (shouldReturnUserOnFailure) {
+    //   req.user = null;
+    //   return next();
+    // }
+    // next(new Error("Invalid token!|||403"));
   } catch (error) {
-    if (shouldReturnUserOnFailure) {
-      req.user = null;
-      return next();
-    }
     return next(new Error("Unauthorized!|||401"));
   }
 };
@@ -113,3 +138,5 @@ export const checkUserPhoneExists = asyncHandler(async (req, res, next) => {
   if (userExists) next();
   else next(new Error("User not found!|||404"));
 });
+
+// next(new Error("Invalid token!|||403"));

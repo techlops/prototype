@@ -3,6 +3,7 @@ import { asyncHandler } from "../middlewares/async-handler.js";
 import * as authController from "../controllers/auth.js";
 import directories from "../configs/directories.js";
 import { upload } from "../middlewares/uploader.js";
+import { verifyToken } from "../middlewares/authenticator.js";
 
 const { IMAGES_DIRECTORY } = directories;
 
@@ -31,6 +32,8 @@ router.post(
 
     };
 
+    console.log("email : ", email);
+
     const response = await authController.registerUser(args);
     res.json(response);
   })
@@ -38,6 +41,35 @@ router.post(
 
 router.post(
   "/registerLaunderer",
+  upload(IMAGES_DIRECTORY).single("image"),
+  asyncHandler(async (req, res) => {
+    const { email, password, firstName, lastName, phone, phoneCode, coordinates, address } = req.body;
+
+    // Get the uploaded image path
+    const imagePath = req.file ? req.file.path : null;
+
+    const args = {
+      email,
+      password,
+      firstName,
+      lastName,
+      phone,
+      phoneCode,
+      image: imagePath, // Assign the image path to the "image" field
+      coordinates,
+      address
+
+    };
+
+    console.log("email : ", email);
+
+    const response = await authController.registerLaunderer(args);
+    res.json(response);
+  })
+);
+
+router.post(
+  "/registerLaundererOld",
   asyncHandler(async (req, res) => {
     const { email, password, firstName, lastName, phone, phoneCode, coordinates, address } = req.body;
 
@@ -63,6 +95,7 @@ router.post(
 
 router.post(
   "/verifyOTP",
+  verifyToken,
   asyncHandler(async (req, res) => {
     const { otp } = req.body;
     const { user } = req.query;
