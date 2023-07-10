@@ -524,7 +524,31 @@ export const laundererReachedLocation = async (params) => {
 export const beforeWorkPictures = async (params) => {
   const {order, user, images} = params;
 
-  console.log("images in controller : ", images)
+  const checkOrder = await ordersModel.findOne({
+    _id: order,
+    subStatus: "reached_location",
+  });
+
+  if (!checkOrder) {
+    throw new Error("Invalid order or substatus has not be updated to 'Location Reached' by User");
+  }
+
+  try {
+    const updateOrder = await ordersModel.findByIdAndUpdate(order, {
+      subStatus: "pickup_location_selected",
+      status: "in_progress",
+      images: images
+    });
+
+    return {
+      success: true,
+      message: "Order status updated successfully to 'Location Reached' & Images before starting work successfully added",
+      data: updateOrder
+    };
+  } catch (error) {
+    throw new Error("Error starting order: " + error.message);
+  }
+
 
 };
 
