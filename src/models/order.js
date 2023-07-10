@@ -15,7 +15,7 @@ const model = mongoose.model;
 
 // destructuring assignments
 const { POINT } = GEO_JSON_TYPES;
-const { IN_PROGRESS, COMPLETED } = MAIN_STATUSESORDER
+const { UPCOMING, IN_PROGRESS, COMPLETED } = MAIN_STATUSESORDER
 const { DOOR, GARAGE, OTHER } = PICKUP_LOCATION_TYPES;
 const {
   PENDING,
@@ -59,6 +59,7 @@ const orderSchema = new Schema(
     status: {
       type: String,
       enum: [
+        UPCOMING,
         IN_PROGRESS,
         COMPLETED
       ]

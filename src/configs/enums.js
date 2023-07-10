@@ -152,7 +152,8 @@ export const BAG_SIZES = {
 export const MAIN_STATUSESORDER = {
   COMPLETED: 'completed',
   IN_PROGRESS: 'in_progress',
-  PENDING: 'pending'
+  PENDING: 'pending',
+  UPCOMING: 'upcoming'
 }
 
 export const APP_CONSTANTS = {
