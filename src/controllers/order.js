@@ -18,6 +18,7 @@ const {
   orderBagsModel,
   constantsModel,
   orderRequestDeclinesModel,
+  orderLogsModel
 } = models;
 
 export const addBagSize = async (params) => {
@@ -181,6 +182,7 @@ export const requestServiceOrder = async (params) => {
     state,
     country,
     bagImages,
+    time,
   } = params;
 
   // Iterate over the bags and bagImages simultaneously
@@ -216,7 +218,7 @@ export const requestServiceOrder = async (params) => {
     city,
     state,
     country,
-    // Other fields
+    time,
   });
 
   await orderBagsModel.updateMany({ _id: { $in: bags } }, { order: order._id });
@@ -226,10 +228,6 @@ export const requestServiceOrder = async (params) => {
     data: order,
   };
 };
-
-// export const nearbyPendingOrderRequests = async (params) => {
-//   const {location, laundererId} = params;
-// };
 
 export const updateLaundererLocationGPT = async (params) => {
   const { coordinates, user } = params;
@@ -325,7 +323,9 @@ export const updateLaundererLocationAggregate = async (params) => {
   };
 };
 
-export const laundererIdentityVerification = async (params) => {};
+export const laundererIdentityVerification = async (params) => {
+  const { user } = params;
+};
 
 export const nearbyPendingOrderRequests = async (params) => {
   const { user } = params;
@@ -446,15 +446,27 @@ export const startService = async (params) => {
 
   try {
     // Update the order status to 'confirmed' and assign the launderer
-    const startService = await ordersModel.findByIdAndUpdate(order, {
+    const updatedOrder  = await ordersModel.findByIdAndUpdate(order, {
       subStatus: "started",
-      status: "in_progress"
+      status: "in_progress",
     });
+
+    const orderLog = new orderLogsModel({
+      order: order,
+      action: "started",
+      actor: user,
+      actorType: "launderer",
+      createdAt: new Date(),
+    });
+
+    await orderLog.save();
+
 
     return {
       success: true,
       message: "Order started successfully",
-      data: startService
+      data: updatedOrder,
+      orderLog
     };
   } catch (error) {
     throw new Error("Error starting order: " + error.message);
@@ -476,15 +488,25 @@ export const laundererOnWay = async (params) => {
 
   try {
     // Update the order status to 'confirmed' and assign the launderer
-    const startService = await ordersModel.findByIdAndUpdate(order, {
+    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
       subStatus: "coming_for_pickup",
-      status: "in_progress"
+      status: "in_progress",
     });
+
+    const orderLog = new orderLogsModel({
+      order: order,
+      action: "coming_for_pickup",
+      actor: user,
+      actorType: "launderer",
+      createdAt: new Date(),
+    });
+
+    await orderLog.save();
 
     return {
       success: true,
       message: "Order status updated successfully to 'On My Way'",
-      data: startService
+      data: updatedOrder,
     };
   } catch (error) {
     throw new Error("Error starting order: " + error.message);
@@ -501,20 +523,32 @@ export const laundererReachedLocation = async (params) => {
   });
 
   if (!checkOrder) {
-    throw new Error("Invalid order or substatus has not be updated to 'On My Way'");
+    throw new Error(
+      "Invalid order or substatus has not be updated to 'On My Way'"
+    );
   }
 
   try {
     // Update the order status to 'confirmed' and assign the launderer
-    const startService = await ordersModel.findByIdAndUpdate(order, {
+    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
       subStatus: "reached_location",
-      status: "in_progress"
+      status: "in_progress",
     });
+
+    const orderLog = new orderLogsModel({
+      order: order,
+      action: "reached_location",
+      actor: user,
+      actorType: "launderer",
+      createdAt: new Date(),
+    });
+
+    await orderLog.save();
 
     return {
       success: true,
       message: "Order status updated successfully to 'Location Reached'",
-      data: startService
+      data: updatedOrder,
     };
   } catch (error) {
     throw new Error("Error starting order: " + error.message);
@@ -522,7 +556,7 @@ export const laundererReachedLocation = async (params) => {
 };
 
 export const beforeWorkPictures = async (params) => {
-  const {order, user, images} = params;
+  const { order, user, images } = params;
 
   const checkOrder = await ordersModel.findOne({
     _id: order,
@@ -530,25 +564,202 @@ export const beforeWorkPictures = async (params) => {
   });
 
   if (!checkOrder) {
-    throw new Error("Invalid order or substatus has not be updated to 'Location Reached' by User");
+    throw new Error(
+      "Invalid order or substatus has not be updated to 'Location Reached' by User"
+    );
   }
 
   try {
     const updateOrder = await ordersModel.findByIdAndUpdate(order, {
       subStatus: "pickup_location_selected",
       status: "in_progress",
-      images: images
+      images: images,
     });
 
     return {
       success: true,
-      message: "Order status updated successfully to 'Location Reached' & Images before starting work successfully added",
-      data: updateOrder
+      message:
+        "Order status updated successfully to 'Location Reached' & Images before starting work successfully added",
+      data: updateOrder,
     };
   } catch (error) {
     throw new Error("Error starting order: " + error.message);
   }
-
-
 };
+
+// retrieve only count of all orders of per day in a given month and year which are assigned to launderer.
+// should return count by each day for example it should return the count of orders on 12th July, the count of order on 13th July so on and so forth from the first of the month till the last day of the month
+
+export const orderCountPerDayArray = async (params) => {
+  const { user, year, month } = params;
+
+  const startDate = new Date(year, month - 1, 1); // Create a start date for the given year and month
+  const endDate = new Date(year, month, 0); // Create an end date for the given year and month
+
+  const query = {
+    launderer: user, // Filter by the specified launderer
+    time: { $gte: startDate, $lte: endDate }, // Filter by the time range between the start and end dates
+  };
+
+  const orders = await ordersModel.find(query); // Find the orders that match the query
+
+  const orderCount = orders.reduce((countObj, order) => {
+    const day = order.time.getDate(); // Get the day from the order's time field
+    countObj[day] = (countObj[day] || 0) + 1; // Increment the count for the corresponding day
+    return countObj;
+  }, {});
+
+  const dataArray = Object.entries(orderCount); // Convert the orderCount object into an array
+
+  return {
+    success: true,
+    data: dataArray,
+  };
+};
+
+export const orderCountPerDay = async (params) => {
+  const { user, year, month } = params;
+
+  const startDate = new Date(year, month - 1, 1); // Create a start date for the given year and month
+  const endDate = new Date(year, month, 0); // Create an end date for the given year and month
+
+  const query = [
+    {
+      $match: {
+        launderer: mongoose.Types.ObjectId(user),
+        time: {
+          $gte: startDate,
+          $lte: endDate,
+        },
+      },
+    },
+    {
+      $group: {
+        _id: { $dayOfMonth: "$time" },
+        count: { $sum: 1 },
+      },
+    },
+  ];
+
+  const result = await ordersModel.aggregate(query);
+
+  console.log("result : ", result);
+
+  // const data = result.reduce((acc, { _id, count }) => {
+  //   acc.push({ [_id.toString()]: count });
+  //   return acc;
+  // }, []);
+
+  return {
+    success: true,
+    result,
+  };
+};
+
+export const ordersByDay = async (params) => {
+  const { user, year, month, day } = params;
+  let { limit, page } = params;
+  if (!limit) limit = 10;
+  if (!page) page = 0;
+  if (page) page = page - 1;
+  const startDate = new Date(year, month - 1, day, 0, 0, 0);
+  const endDate = new Date(year, month - 1, day, 23, 59, 59);
+
+  let query = [
+    {
+      $match: {
+        launderer: mongoose.Types.ObjectId(user),
+        time: {
+          $gte: startDate,
+          $lte: endDate,
+        },
+      },
+    },
+    { $skip: page * limit },
+    { $limit: limit },
+  ];
+
+  const [orders, totalCount] = await Promise.all([
+    ordersModel.aggregate(query),
+    ordersModel.countDocuments({
+      launderer: mongoose.Types.ObjectId(user),
+      time: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / limit);
+
+  const orderDetails = orders.map((order) => {
+    return { order };
+  });
+
+  return {
+    success: true,
+    data: {
+      orderDetails,
+      totalCount,
+      totalPages
+    },
+  };
+};
+
+export const ordersByDay1 = async (params) => {
+  const { user, year, month, day } = params;
+  let { limit, page } = params;
+  if (!limit) limit = 10;
+  if (!page) page = 0;
+  if (page) page = page - 1;
+
+  const startDate = new Date(year, month - 1, day, 0, 0, 0);
+  const endDate = new Date(year, month - 1, day, 23, 59, 59);
+
+  const query = [
+    {
+      $match: {
+        launderer: mongoose.Types.ObjectId(user),
+        time: {
+          $gte: startDate,
+          $lte: endDate,
+        },
+      },
+    },
+    {
+      $facet: {
+        orderDetails: [
+          { $skip: page * limit },
+          { $limit: limit },
+          {
+            $project: {
+              _id: 0,
+              order: "$$ROOT",
+            },
+          },
+        ],
+        totalCount: [
+          {
+            $count: "count",
+          },
+        ],
+      },
+    },
+  ];
+
+  const [result] = await ordersModel.aggregate(query);
+
+  const { orderDetails, totalCount } = result;
+  const total = totalCount.length > 0 ? totalCount[0].count : 0;
+
+  return {
+    success: true,
+    data: {
+      orderDetails,
+      totalCount: total,
+    },
+  };
+};
+
+
 

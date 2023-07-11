@@ -9,6 +9,7 @@ import paymentAccounts from "./payment-accounts.js";
 import contactUsMessage from "./contact-us-mesaages.js";
 import constants from "./constants.js";
 import orderRequestDeclines from "./order-request-declines.js";
+import orderLogs from "./order-logs.js";
 
 export default {
   bagSizesModel: bagSizes,
@@ -21,6 +22,7 @@ export default {
   paymentAccountsModel: paymentAccounts,
   contactUsMessageModel: contactUsMessage,
   constantsModel: constants,
-  orderRequestDeclinesModel: orderRequestDeclines
+  orderRequestDeclinesModel: orderRequestDeclines,
+  orderLogsModel: orderLogs
 };
 

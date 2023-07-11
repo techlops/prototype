@@ -31,6 +31,7 @@ router.post(
       city,
       state,
       country,
+      time
     } = req.body;
 
     // Prepare an array to store the bag images
@@ -64,6 +65,7 @@ router.post(
       state,
       country,
       bagImages,
+      time
     };
     const response = await ordersController.requestServiceOrder(args);
     res.json(response);
@@ -165,5 +167,31 @@ router.post(
     res.json(response);
   })
 );
+
+router.get(
+  "/order-count-per-days-of-month",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { month, year } = req.query;
+    const args = {month, year, user}
+
+    const response = await ordersController.orderCountPerDay(args);
+    res.json(response);
+  })
+)
+
+router.get(
+  "/orders-by-single-day",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { day, month, year, page, limit } = req.query;
+    const args = {day, month, year, user, page, limit}
+
+    const response = await ordersController.ordersByDay(args);
+    res.json(response);
+  })
+)
 
 export default router;

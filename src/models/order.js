@@ -85,9 +85,8 @@ const orderSchema = new Schema(
     required: true,
     index: true,
     },
-    orderSubStepTime: {
+    time: {
       type: Date,
-      // required: true
     },
     orderBags: [
       {
