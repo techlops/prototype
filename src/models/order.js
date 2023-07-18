@@ -61,7 +61,9 @@ const orderSchema = new Schema(
       enum: [
         UPCOMING,
         IN_PROGRESS,
-        COMPLETED
+        COMPLETED,
+        PENDING,
+        CANCELLED
       ]
     },
     subStatus: {

@@ -73,7 +73,6 @@ const laundererSchema = new Schema(
     zip: {
       type: String,
       trim: true,
-      required: true,
     },
     coordinates: {
       type: [Number],

@@ -14,6 +14,7 @@ const bagSizeSchema = new Schema(
     capacity: {
       type: Number,
       required: true,
+      default: 0
     },
     price: {
       type: Number, 

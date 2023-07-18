@@ -153,7 +153,8 @@ export const MAIN_STATUSESORDER = {
   COMPLETED: 'completed',
   IN_PROGRESS: 'in_progress',
   PENDING: 'pending',
-  UPCOMING: 'upcoming'
+  UPCOMING: 'upcoming',
+  CANCELLED: 'cancelled'
 }
 
 export const APP_CONSTANTS = {

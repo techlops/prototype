@@ -2,11 +2,9 @@ import models from "../models/index.js";
 import bcrypt from "bcryptjs";
 import otpGenerator from "otp-generator";
 import { isValidObjectId, Types } from "mongoose";
-import { getUserDetails } from "./launderer.js";
+// import { getUserDetails } from "./launderer.js";
 import { getToken } from "../middlewares/authenticator.js";
 import mongoose from "mongoose";
-import path from "path";
-import orderBags from "../models/order-bags.js";
 
 const { ObjectId } = Types;
 
@@ -21,26 +19,7 @@ const {
   orderLogsModel
 } = models;
 
-export const addBagSize = async (params) => {
-  const { bagSize } = params;
 
-  const orderBag = new orderBagsModel({
-    bagSize,
-  });
-
-  await orderBag.save();
-
-  const order = new ordersModel({
-    bags: [orderBag._id],
-  });
-
-  await ordersModel.save();
-
-  return {
-    success: true,
-    order: order,
-  };
-};
 
 export const calculateTotalAmount = async (params) => {
   try {
@@ -81,91 +60,6 @@ export const calculateTotalAmount = async (params) => {
       error: error.message,
     };
   }
-};
-
-export const requestServiceOrdereq = async (params) => {
-  const {
-    bags,
-    totalAmount,
-    coordinates,
-    lflBagsCount,
-    deliveryFee,
-    user,
-    zip,
-    address,
-    city,
-    state,
-    country,
-  } = params;
-
-  // console.log("bags : ",bags)
-  console.log("params : ", params);
-
-  // Validate input data
-  if (!Array.isArray(bags) || bags.length === 0) {
-    return {
-      success: false,
-      message: "Invalid bags data",
-    };
-  }
-  // if (typeof totalAmount !== "number") {
-  //   return {
-  //     success: false,
-  //     message: "Invalid totalAmount",
-  //   };
-  // }
-  // if (lflBagsCount < 0) {
-  //   return {
-  //     success: false,
-  //     message: "Invalid lflBagsCount",
-  //   };
-  // }
-
-  const orderBagIds = [];
-
-  // Create orderBags and store their IDs
-  for (const bag of bags) {
-    const { price, images, temperatureSettings, spinSettings } = bag;
-
-    const orderBag = new orderBagsModel({
-      price,
-      images,
-      temperature: temperatureSettings,
-      spinSettings,
-    });
-
-    await orderBag.save();
-    orderBagIds.push(orderBag._id);
-  }
-
-  const customer = mongoose.Types.ObjectId(user);
-
-  const orderObj = {
-    customer: customer,
-    orderBags: orderBagIds,
-    date: new Date(),
-    totalAmount,
-    deliveryFee,
-    lflBagsCount,
-    zip,
-    address,
-    city,
-    state,
-    country,
-  };
-
-  if (coordinates) {
-    orderObj.customLocation = {
-      coordinates: coordinates,
-    };
-  }
-
-  const order = await ordersModel.create(orderObj);
-
-  return {
-    success: true,
-    order,
-  };
 };
 
 export const requestServiceOrder = async (params) => {
@@ -228,6 +122,10 @@ export const requestServiceOrder = async (params) => {
     data: order,
   };
 };
+
+
+// LAUNDERER
+
 
 export const updateLaundererLocationGPT = async (params) => {
   const { coordinates, user } = params;
@@ -474,7 +372,7 @@ export const startService = async (params) => {
 };
 
 export const laundererOnWay = async (params) => {
-  const { order, user } = params;
+  const { order, user, coordinates } = params;
 
   // Check if the order substatus is 'pending'
   const checkOrder = await ordersModel.findOne({
@@ -501,7 +399,13 @@ export const laundererOnWay = async (params) => {
       createdAt: new Date(),
     });
 
+    // sockets 
+    // send coordinates to customer id from orders table through sockets
+    // make an event and have the customer listen to that event
+
     await orderLog.save();
+
+    // socket orderlogs to customer
 
     return {
       success: true,
@@ -514,7 +418,7 @@ export const laundererOnWay = async (params) => {
 };
 
 export const laundererReachedLocation = async (params) => {
-  const { order, user } = params;
+  const { order, user, coordinates } = params;
 
   // Check if the order substatus is 'pending'
   const checkOrder = await ordersModel.findOne({
@@ -549,14 +453,15 @@ export const laundererReachedLocation = async (params) => {
       success: true,
       message: "Order status updated successfully to 'Location Reached'",
       data: updatedOrder,
+      orderLog
     };
   } catch (error) {
     throw new Error("Error starting order: " + error.message);
   }
 };
 
-export const beforeWorkPictures = async (params) => {
-  const { order, user, images } = params;
+export const pickupLocationSelect = async (params) => {
+  const { order, user, images, pickUpType } = params;
 
   const checkOrder = await ordersModel.findOne({
     _id: order,
@@ -574,49 +479,205 @@ export const beforeWorkPictures = async (params) => {
       subStatus: "pickup_location_selected",
       status: "in_progress",
       images: images,
+      pickupLocation: pickUpType
     });
+
+    const orderLog = new orderLogsModel({
+      order: order,
+      action: "pickup_location_selected",
+      actor: user,
+      actorType: "launderer",
+      createdAt: new Date(),
+    });
+
+    await orderLog.save();
 
     return {
       success: true,
-      message:
-        "Order status updated successfully to 'Location Reached' & Images before starting work successfully added",
+      message: "Pick up location successfully added & Images before starting work successfully added",
       data: updateOrder,
+      orderLog
     };
   } catch (error) {
     throw new Error("Error starting order: " + error.message);
   }
 };
 
-// retrieve only count of all orders of per day in a given month and year which are assigned to launderer.
-// should return count by each day for example it should return the count of orders on 12th July, the count of order on 13th July so on and so forth from the first of the month till the last day of the month
+export const clothesInDryer = async (params) => {
+  const { order, user } = params;
 
-export const orderCountPerDayArray = async (params) => {
-  const { user, year, month } = params;
+  // Check if the order substatus is 'pending'
+  const checkOrder = await ordersModel.findOne({
+    _id: order,
+    subStatus: "pickup_location_selected",
+  });
 
-  const startDate = new Date(year, month - 1, 1); // Create a start date for the given year and month
-  const endDate = new Date(year, month, 0); // Create an end date for the given year and month
+  if (!checkOrder) {
+    throw new Error(
+      "Invalid order or substatus has not be updated to 'pickup_location_selected'"
+    );
+  }
 
-  const query = {
-    launderer: user, // Filter by the specified launderer
-    time: { $gte: startDate, $lte: endDate }, // Filter by the time range between the start and end dates
-  };
+  try {
+    // Update the order status to 'confirmed' and assign the launderer
+    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+      subStatus: "clothes_in_dryer",
+      status: "in_progress",
+    });
 
-  const orders = await ordersModel.find(query); // Find the orders that match the query
+    const orderLog = new orderLogsModel({
+      order: order,
+      action: "clothes_in_dryer",
+      actor: user,
+      actorType: "launderer",
+      createdAt: new Date(),
+    });
 
-  const orderCount = orders.reduce((countObj, order) => {
-    const day = order.time.getDate(); // Get the day from the order's time field
-    countObj[day] = (countObj[day] || 0) + 1; // Increment the count for the corresponding day
-    return countObj;
-  }, {});
+    await orderLog.save();
 
-  const dataArray = Object.entries(orderCount); // Convert the orderCount object into an array
-
-  return {
-    success: true,
-    data: dataArray,
-  };
+    return {
+      success: true,
+      message: "Order status updated successfully updated to 'clothes_in_dryer'",
+      data: updatedOrder,
+      orderLog
+    };
+  } catch (error) {
+    throw new Error("Error updating order: " + error.message);
+  }
 };
 
+export const clothesFolding = async (params) => {
+  const { order, user } = params;
+
+  // Check if the order substatus is 'pending'
+  const checkOrder = await ordersModel.findOne({
+    _id: order,
+    subStatus: "clothes_in_dryer",
+  });
+
+  if (!checkOrder) {
+    throw new Error(
+      "Invalid order or substatus has not be updated to 'pickup_location_selected'"
+    );
+  }
+
+  try {
+    // Update the order status to 'confirmed' and assign the launderer
+    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+      subStatus: "clothes_folding",
+      status: "in_progress",
+    });
+
+    const orderLog = new orderLogsModel({
+      order: order,
+      action: "clothes_folding",
+      actor: user,
+      actorType: "launderer",
+      createdAt: new Date(),
+    });
+
+    await orderLog.save();
+
+    return {
+      success: true,
+      message: "Order status successfully updated to 'clothes_folding'",
+      data: updatedOrder,
+      orderLog
+    };
+  } catch (error) {
+    throw new Error("Error updating order: " + error.message);
+  }
+};
+
+export const clothesDelivery = async (params) => {
+  const { order, user } = params;
+
+  // Check if the order substatus is 'pending'
+  const checkOrder = await ordersModel.findOne({
+    _id: order,
+    subStatus: "clothes_folding",
+  });
+
+  if (!checkOrder) {
+    throw new Error(
+      "Invalid order or substatus has not be updated to 'pickup_location_selected'"
+    );
+  }
+
+  try {
+    // Update the order status to 'confirmed' and assign the launderer
+    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+      subStatus: "clothes_delivery",
+      status: "in_progress",
+    });
+
+    const orderLog = new orderLogsModel({
+      order: order,
+      action: "clothes_delivery",
+      actor: user,
+      actorType: "launderer",
+      createdAt: new Date(),
+    });
+
+    await orderLog.save();
+
+    return {
+      success: true,
+      message: "Order status successfully updated to 'clothes_delivery'",
+      data: updatedOrder,
+      orderLog
+    };
+  } catch (error) {
+    throw new Error("Error updating order: " + error.message);
+  }
+};
+
+export const submitWork = async (params) => {
+  const { order, user, feedback } = params;
+
+  // Check if the order substatus is 'pending'
+  const checkOrder = await ordersModel.findOne({
+    _id: order,
+    subStatus: "clothes_delivery",
+  });
+
+  if (!checkOrder) {
+    throw new Error(
+      "Invalid order or substatus has not be updated to 'clothes_delivery'"
+    );
+  }
+
+  try {
+    // Update the order status to 'confirmed' and assign the launderer
+    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+      subStatus: "work_submitted",
+      status: "completed",
+      laundererFeedback: feedback,
+    });
+
+    const orderLog = new orderLogsModel({
+      order: order,
+      action: "work_submitted",
+      actor: user,
+      actorType: "launderer",
+      createdAt: new Date(),
+    });
+
+    await orderLog.save();
+
+    return {
+      success: true,
+      message: "Order status successfully updated to 'work_submitted'",
+      data: updatedOrder,
+      orderLog
+    };
+  } catch (error) {
+    throw new Error("Error updating order: " + error.message);
+  }
+};
+
+// retrieve only count of all orders of per day in a given month and year which are assigned to launderer.
+// should return count by each day for example it should return the count of orders on 12th July, the count of order on 13th July so on and so forth from the first of the month till the last day of the month
 export const orderCountPerDay = async (params) => {
   const { user, year, month } = params;
 
@@ -706,60 +767,153 @@ export const ordersByDay = async (params) => {
   };
 };
 
-export const ordersByDay1 = async (params) => {
-  const { user, year, month, day } = params;
-  let { limit, page } = params;
+
+export const inProgressOrders = async (params) => {
+  const { user } = params;
+  let { page, limit } = params;
+
   if (!limit) limit = 10;
-  if (!page) page = 0;
-  if (page) page = page - 1;
+  if (!page) page = 1;
 
-  const startDate = new Date(year, month - 1, day, 0, 0, 0);
-  const endDate = new Date(year, month - 1, day, 23, 59, 59);
-
-  const query = [
-    {
-      $match: {
-        launderer: mongoose.Types.ObjectId(user),
-        time: {
-          $gte: startDate,
-          $lte: endDate,
-        },
-      },
-    },
-    {
-      $facet: {
-        orderDetails: [
-          { $skip: page * limit },
-          { $limit: limit },
-          {
-            $project: {
-              _id: 0,
-              order: "$$ROOT",
-            },
-          },
-        ],
-        totalCount: [
-          {
-            $count: "count",
-          },
-        ],
-      },
-    },
-  ];
-
-  const [result] = await ordersModel.aggregate(query);
-
-  const { orderDetails, totalCount } = result;
-  const total = totalCount.length > 0 ? totalCount[0].count : 0;
-
-  return {
-    success: true,
-    data: {
-      orderDetails,
-      totalCount: total,
-    },
+  const query = {
+    launderer: user,
+    status: "in_progress",
   };
+
+  try {
+    const totalCount = await ordersModel.countDocuments(query);
+    const totalPages = Math.ceil(totalCount / limit);
+    const skipCount = (page - 1) * limit;
+
+    const orders = await ordersModel
+      .find(query)
+      .select("totalAmount status address time")
+      .skip(skipCount)
+      .limit(limit);
+
+    return {
+      success: true,
+      data: {
+        orders,
+        totalCount,
+        totalPages,
+      },
+    };
+  } catch (error) {
+    throw new Error("Error fetching in-progress orders: " + error.message);
+  }
 };
+
+
+export const upcomingOrders = async (params) => {
+  const { user } = params;
+  let { page, limit } = params;
+
+  if (!limit) limit = 10;
+  if (!page) page = 1;
+
+  const query = {
+    launderer: user,
+    status: "upcoming",
+  };
+
+  try {
+    const totalCount = await ordersModel.countDocuments(query);
+    const totalPages = Math.ceil(totalCount / limit);
+    const skipCount = (page - 1) * limit;
+
+    const orders = await ordersModel
+      .find(query)
+      .select("totalAmount status address time")
+      .skip(skipCount)
+      .limit(limit);
+
+    return {
+      success: true,
+      data: {
+        orders,
+        totalCount,
+        totalPages,
+      },
+    };
+  } catch (error) {
+    throw new Error("Error fetching upcoming orders: " + error.message);
+  }
+};
+
+
+export const completedOrders = async (params) => {
+  const { user } = params;
+  let { page, limit } = params;
+
+  if (!limit) limit = 10;
+  if (!page) page = 1;
+
+  const query = {
+    launderer: user,
+    status: "completed",
+  };
+
+  try {
+    const totalCount = await ordersModel.countDocuments(query);
+    const totalPages = Math.ceil(totalCount / limit);
+    const skipCount = (page - 1) * limit;
+
+    const orders = await ordersModel
+      .find(query)
+      .select("totalAmount status address time")
+      .skip(skipCount)
+      .limit(limit);
+
+    return {
+      success: true,
+      data: {
+        orders,
+        totalCount,
+        totalPages,
+      },
+    };
+  } catch (error) {
+    throw new Error("Error fetching completed orders: " + error.message);
+  }
+};
+
+export const cancelledOrders = async (params) => {
+  const { user } = params;
+  let { page, limit } = params;
+
+  if (!limit) limit = 10;
+  if (!page) page = 1;
+
+  const query = {
+    launderer: user,
+    status: "cancelled",
+  };
+
+  try {
+    const totalCount = await ordersModel.countDocuments(query);
+    const totalPages = Math.ceil(totalCount / limit);
+    const skipCount = (page - 1) * limit;
+
+    const orders = await ordersModel
+      .find(query)
+      .select("totalAmount status address time")
+      .skip(skipCount)
+      .limit(limit);
+
+    return {
+      success: true,
+      data: {
+        orders,
+        totalCount,
+        totalPages,
+      },
+    };
+  } catch (error) {
+    throw new Error("Error fetching completed orders: " + error.message);
+  }
+};
+
 
 
 

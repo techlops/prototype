@@ -1,10 +1,17 @@
 // module imports
 import mongoose from "mongoose";
 // file imports
-import {
-  GEO_JSON_TYPES,
-} from "../configs/enums.js";
+import { GEO_JSON_TYPES, AUTH_STEPS } from "../configs/enums.js";
 
+const {
+  BASIC_REGISTRATION,
+  PROFILE_COMPLETION,
+  PHONE_VERIFICATION,
+  LOCATION_ADDITION,
+  IDENTITY_VERIFICATION,
+  SERVICE_AREAS_SELECTION,
+  W9_FORM_SUBMISSION,
+} = AUTH_STEPS;
 // destructuring assignments
 const { POINT } = GEO_JSON_TYPES;
 
@@ -42,6 +49,20 @@ const userSchema = new Schema(
       minlength: [6, "Password must be at least 6 characters"],
       maxlength: [1024, "Password cannot exceed 1024 characters"],
       select: false,
+    },
+    authStepsCompleted: {
+      type: String,
+      enum: [
+        BASIC_REGISTRATION,
+        PROFILE_COMPLETION,
+        PHONE_VERIFICATION,
+        LOCATION_ADDITION,
+        IDENTITY_VERIFICATION,
+        SERVICE_AREAS_SELECTION,  
+        W9_FORM_SUBMISSION,
+      ],
+      required: true,
+      index: true,
     },
     phone: {
       type: String,
@@ -85,7 +106,7 @@ const userSchema = new Schema(
         type: String,
         enum: [POINT],
         default: POINT,
-        required: true,
+        // required: true,
       },
       coordinates: {
         type: [Number],
@@ -128,6 +149,11 @@ const userSchema = new Schema(
       select: false,
       default: false,
     },
+    token: {
+      type: String,
+      trim: true,
+    },
+
   },
   {
     timestamps: true,

@@ -2,26 +2,47 @@
 import mongoose from "mongoose";
 
 // file imports
-import { PAYMENT_ACCOUNT_TYPES } from "../configs/enums.js";
+import { APP_CONSTANTS } from "../configs/enums.js";
 
 // destructuring assignments
-const { STRIPE_ACCOUNT, STRIPE_CUSTOMER } = PAYMENT_ACCOUNT_TYPES;
+const {
+  ABOUT_US,
+  TERMS_AND_CONDITIONS,
+  PRIVACY_POLICY,
+  LFL_BAG_PRICE,
+  DELIVERY_FEE,
+  APP_CHARGES_PERCENTAGE,
+} = APP_CONSTANTS;
 
 // variable initializations
 const Schema = mongoose.Schema;
+const model = mongoose.model;
 
-const constantsSchema = new Schema(
+const constantSchema = new Schema(
   {
-    lflBagPrice: {
-      type: Number
+    title: {
+      type: String,
+      enum: [
+        ABOUT_US,
+        TERMS_AND_CONDITIONS,
+        PRIVACY_POLICY,
+        LFL_BAG_PRICE,
+        DELIVERY_FEE,
+        APP_CHARGES_PERCENTAGE,
+      ],
+      index: true,
+      unique: true,
+      required: true,
     },
-    deliveryFee: {
-      type: Number
-    }
+    description: {
+      type: String,
+    },
+    value: {
+      type: Number,
+    },
   },
   {
     timestamps: true,
   }
 );
-
-export default mongoose.model("constants", constantsSchema);
+export default model("constants", constantSchema);

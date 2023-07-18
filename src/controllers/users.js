@@ -23,13 +23,18 @@ export const myProfile = async (params) => {
   console.log("")
   const { user } = params;
     
-  const userExists = await usersModel.findOne({user});
+  const userExists = await usersModel.findOne({_id: user});
   if (userExists){
     return{
       success: true,
       userExists
     }
   }
+}
+
+export const editProfile = async (params) => {
+  const {firstName, lastName, phoneNumber, address} = params;
+  
 }
 
 

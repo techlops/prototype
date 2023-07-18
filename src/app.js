@@ -8,7 +8,7 @@ import cors from "cors";
 import chalk from "chalk";
 import mongoose from "mongoose";
 import { fileURLToPath } from "url";
-import { getUserDetails } from "./controllers/launderer.js";
+// import { getUserDetails } from "./controllers/launderer.js";
 
 // file imports
 import "./.bin/www.js";

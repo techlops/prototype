@@ -4,13 +4,15 @@ import * as ordersController from "../controllers/order.js";
 import { upload } from "../middlewares/uploader.js";
 import directories from "../configs/directories.js";
 import path from "path";
-import { verifyToken } from "../middlewares/authenticator.js";
+import { verifyToken, verifyUser } from "../middlewares/authenticator.js";
 
 const { IMAGES_DIRECTORY } = directories;
 
 // const { ATTACHMENTS_DIRECTORY } = directories;
 
 const router = express.Router();
+
+// CUSTOMER
 
 // Request order service
 router.post(
@@ -72,6 +74,43 @@ router.post(
   })
 );
 
+// feedback submit
+router.patch(
+  "/submit-work/:order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+
+    const args = { user, order };
+
+    const response = await ordersController.feedbackSubmit(args);
+
+    res.json(response);
+  })
+);
+
+// get order logs (track order)
+
+// get order details
+
+// cancel order
+
+// report order
+
+// add new locations
+
+// edit existing locations
+
+// update cus
+
+// 
+
+
+// LAUNDERER
+
+
+
 // View nearby order requests
 router.get(
   "/nearby-orders",
@@ -120,54 +159,141 @@ router.post(
   })
 );
 
-// Upload images before starting work
-router.post(
-  "/images-before-work/:order",
+// start service
+router.patch(
+  "/start-service-order/:order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+
+    const args = { user, order };
+
+    const response = await ordersController.startService(args);
+
+    res.json(response);
+  })
+)
+
+// coming for picking up order
+router.patch(
+  "/coming-for-pickup/:order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+
+    const args = { user, order };
+
+    const response = await ordersController.laundererOnWay(args);
+
+    res.json(response);
+  })
+);
+
+// launderer reached location
+router.patch(
+  "/reached-location/:order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+
+    const args = { user, order };
+
+    const response = await ordersController.laundererReachedLocation(args);
+
+    res.json(response);
+  })
+);
+
+// Upload images before starting work and select pick up location type
+router.patch(
+  "/pickup-location-select/:order",
   verifyToken,
   upload(IMAGES_DIRECTORY).any(),
   asyncHandler(async (req, res) => {
     const user = req.user;
-    const { order } = req.params;
+    const { order } = req.params; 
+    const { pickUpType } = req.query;
     const images = req.files.map((file) => path.basename(file.path));
 
-    const args = { user, order, images };
+    const args = { user, order, images, pickUpType };
 
     console.log("images : ", images)
 
-    const response = await ordersController.beforeWorkPictures(args);
+    const response = await ordersController.pickupLocationSelect(args);
 
     res.json(response);
   })
 );
 
-router.post(
-  "/images-before-workss/:order",
+// clothes in dryer
+router.patch(
+  "/clothes-in-dryer/:order",
   verifyToken,
-  upload(IMAGES_DIRECTORY).any("images[]"),
   asyncHandler(async (req, res) => {
     const user = req.user;
     const { order } = req.params;
-    const { images } = req.files;
 
-    console.log("req.files: ", req.files);
+    const args = { user, order };
 
-    // if (!images) {
-    //   return res.status(400).json({ error: "No images uploaded" });
-    // }
+    const response = await ordersController.clothesInDryer(args);
 
-    // Extract the file paths from the uploaded images
-    const imagePaths = images.map((file) => file.path);
-
-    console.log("imagePaths: ", imagePaths);
-
-    const response = await ordersController.beforeWorkPictures(
-      order,
-      imagePaths
-    );
     res.json(response);
   })
 );
 
+// clothes folding
+router.patch(
+  "/clothes-fold/:order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+
+    const args = { user, order };
+
+    const response = await ordersController.clothesFolding(args);
+
+    res.json(response);
+  })
+);
+
+// clothes delivery
+router.patch(
+  "/deliver-clothes/:order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+
+    const args = { user, order };
+
+    const response = await ordersController.clothesDelivery(args);
+
+    res.json(response);
+  })
+);
+
+// submit work
+router.patch(
+  "/submit-work/:order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+    const {feedback} = req.body;
+
+    const args = { user, order };
+
+    const response = await ordersController.submitWork(args);
+
+    res.json(response);
+  })
+);
+
+// order count per days of month for calender
 router.get(
   "/order-count-per-days-of-month",
   verifyToken,
@@ -179,8 +305,9 @@ router.get(
     const response = await ordersController.orderCountPerDay(args);
     res.json(response);
   })
-)
+);
 
+// orders by single day
 router.get(
   "/orders-by-single-day",
   verifyToken,
@@ -192,6 +319,59 @@ router.get(
     const response = await ordersController.ordersByDay(args);
     res.json(response);
   })
-)
+);
+
+// list of in progress orders
+router.get(
+  "/in-progress-orders",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const{page, limit} = req.query;
+    const args = { user, page, limit }
+
+    const response = await ordersController.inProgressOrders(args);
+    res.json(response);
+  })
+);
+
+// list of upcoming orders
+router.get(
+  "/upcoming-orders",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const{page, limit} = req.query;
+    const args = { user, page, limit }
+
+    const response = await ordersController.upcomingOrders(args);
+    res.json(response);
+  })
+);
+
+// list of completed orders
+router.get(
+  "/completed-orders",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const{page, limit} = req.query;
+    const args = { user, page, limit }
+
+    const response = await ordersController.completedOrders(args);
+    res.json(response);
+  })
+);
+
+
+// update launderer location on map when order service started and when coming for delivery
+
+// launderer profile of total orders and total earnings
+
+// list of launderer reviews
+
+// list of canceled orders
+
+// list of declined orders
 
 export default router;

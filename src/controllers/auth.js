@@ -2,7 +2,7 @@ import models from "../models/index.js";
 import bcrypt from "bcryptjs";
 import otpGenerator from "otp-generator";
 import { isValidObjectId, Types } from "mongoose";
-import { getUserDetails } from "./launderer.js";
+// import { getUserDetails } from "./launderer.js";
 import { getToken } from "../middlewares/authenticator.js";
 
 const { ObjectId } = Types;
@@ -12,42 +12,70 @@ const { ObjectId } = Types;
 // importing models
 const { usersModel, launderersModel } = models;
 
-export const registerUser = async (params) => {
-  const {
-    email,
-    password,
-    firstName,
-    lastName,
-    phone,
-    image,
-    coordinates,
-    address
-  } = params;
-  const userExists = await usersModel.findOne({ email });
+// CUSTOMER
 
+export const basicRegistrationCustomer = async (params) => {
+  const { email, password } = params;
+  const userExists = await usersModel.findOne({ email });
   if (userExists) {
-    return {
-      success: false,
-      message: "Email already exists",
-    };
+    throw new Error("User already exists ||| 400");
   }
 
   // Encrypt the password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // Generate a random OTP
-  const otp = otpGenerator.generate(6, {
-    digits: true,
-    upperCase: false,
-    specialChars: false,
-  });
-
-  // Create a new user
   const newUser = {
     email,
     password: hashedPassword,
+    isCustomer: true,
+    authStepsCompleted: "basic_registration",
+  };
+
+  // Save new user to the database
+  const savedUser = await usersModel.create(newUser);
+
+  const user = savedUser._id;
+  const token = getToken(user);
+
+  savedUser.token = token;
+  await savedUser.save();
+
+  return {
+    success: true,
+    data: {
+      user: savedUser.email,
+    },
+    token: token,
+  };
+};
+
+export const profileCompletionCustomer = async (params) => {
+  const {
+    user,
     firstName,
     lastName,
+    phone,
+    phoneCode,
+    image,
+    coordinates,
+    address,
+  } = params;
+
+  // Generate a random OTP
+
+  // Generate a random OTP
+  const otp = otpGenerator.generate(4, {
+    digits: true,
+    upperCase: false,
+    specialChars: false,
+    alphabets: false,
+  });
+
+  const updateObj = {
+    authStepsCompleted: "profile_completion",
+    firstName,
+    lastName,
+    phoneCode,
     phone,
     otp,
     address,
@@ -55,73 +83,116 @@ export const registerUser = async (params) => {
   };
 
   if (image) {
-    newUser.image = {
+    updateObj.image = {
       path: image,
     };
   }
 
   if (coordinates) {
     console.log(coordinates);
-    newUser.location = {
+    updateObj.location = {
       coordinates: coordinates,
     };
   }
 
-  // Save new user to the database
-  const savedUser = await usersModel.create(newUser);
+  const profileUpdate = await usersModel.findByIdAndUpdate(user, updateObj, {
+    new: true,
+  });
 
-  // const token = savedUser.getToken(newUser._id); wrong
-  const user = savedUser._id;
-  console.log("user :", user, "otp :", otp)
-  const token = getToken(user, otp);
+  console.log("OTP  ------------------------> : ", otp);
 
   return {
     success: true,
-    data: {
-      user: { _id: savedUser._id, ...savedUser._doc },
-    },
-    token: token
   };
 };
 
-export const registerLaunderer = async (params) => {
-  const {
-    email,
-    password,
-    firstName,
-    lastName,
-    phone,
-    image,
-    coordinates,
-    address
-  } = params;
+export const phoneVerificationCustomer = async (params) => {
+  const { otp, user } = params;
+
+  const existingUser = await usersModel.findById(user);
+
+  if (existingUser.otp !== otp) {
+    throw new Error("Invalid OTP ||| 400");
+  }
+
+  existingUser.isPhoneVerified = true;
+  existingUser.authStepsCompleted = "phone_verification";
+
+  const updatedUser = await existingUser.save();
+
+  return {
+    success: true,
+    message: "OTP verification successful",
+  };
+};
+
+// LAUNDERER
+
+export const basicRegistrationLaunderer = async (params) => {
+  const { email, password } = params;
   const userExists = await usersModel.findOne({ email });
-
-  console.log("bewewewewewewewewewe")
-
   if (userExists) {
-    return {
-      success: false,
-      message: "Email already exists",
-    };
+    throw new Error("User already exists ||| 400");
   }
 
   // Encrypt the password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // Generate a random OTP
-  const otp = otpGenerator.generate(6, {
-    digits: true,
-    upperCase: false,
-    specialChars: false,
-  });
-
-  // Create a new user
   const newUser = {
     email,
     password: hashedPassword,
+    isLaunderer: true,
+    authStepsCompleted: "basic_registration",
+  };
+
+  // Save new user to the database
+  const savedUser = await usersModel.create(newUser);
+
+  const user = savedUser._id;
+  const token = getToken(user);
+
+  savedUser.token = token;
+  await savedUser.save();
+
+  // Create a launderer using the saved user's _id
+  const createLaunderer = await launderersModel.create({ user: user });
+
+  return {
+    success: true,
+    data: {
+      user: savedUser.email,
+    },
+    token: token,
+  };
+};
+
+export const profileCompletionLaunderer = async (params) => {
+  const {
+    user,
     firstName,
     lastName,
+    phone,
+    phoneCode,
+    image,
+    coordinates,
+    address,
+  } = params;
+
+  // Generate a random OTP
+  const otp = otpGenerator.generate(4, {
+    digits: true,
+    upperCase: false,
+    specialChars: false,
+    alphabets: false,
+  });
+
+  // console.log("params : ", params);
+
+  const updateObj = {
+    authStepsCompleted: "profile_completion",
+    firstName,
+    lastName,
+    phoneCode,
     phone,
     otp,
     address,
@@ -129,167 +200,262 @@ export const registerLaunderer = async (params) => {
   };
 
   if (image) {
-    newUser.image = {
+    updateObj.image = {
       path: image,
     };
   }
 
   if (coordinates) {
     console.log(coordinates);
-    newUser.location = {
+    updateObj.location = {
       coordinates: coordinates,
     };
   }
 
-  // Save new user to the database
-  const savedUser = await usersModel.create(newUser);
+  const profileUpdate = await usersModel.findByIdAndUpdate(user, updateObj, {
+    new: true,
+  });
 
-  // const token = savedUser.getToken(newUser._id); wrong
-  const user = savedUser._id;
-  console.log("user :", user, "otp :", otp)
-  const token = getToken(user, otp, coordinates, address, phone, email);
+  console.log("OTP ----------------------->    ", otp);
+
+  return {
+    success: true,
+  };
+};
+
+export const phoneVerificationLaunderer = async (params) => {
+  const { otp, user } = params;
+
+  console.log("params : ", params);
+
+  const existingUser = await usersModel.findById(user);
+
+  console.log("existingUser : ", existingUser);
+
+  if (existingUser.otp !== otp) {
+    throw new Error("Invalid OTP ||| 400");
+  }
+
+  existingUser.isPhoneVerified = true;
+  existingUser.authStepsCompleted = "phone_verification";
+
+  const updatedUser = await existingUser.save();
+
+  return {
+    success: true,
+    message: "OTP verification successful",
+  };
+};
+
+export const locationAddition = async (params) => {
+  const { user, coordinates, state, city, country, zip, address } = params;
+
+  const updateObj = {
+    authStepsCompleted: "location_addition",
+    state,
+    city,
+    country,
+    zip,
+    address,
+  };
+
+  if (coordinates) {
+    updateObj.location = {
+      coordinates: coordinates,
+    };
+  }
+
+  const profileUpdate = await usersModel.findByIdAndUpdate(user, updateObj, {
+    new: true,
+  });
+
+  console.log("profile update : ", profileUpdate);
 
   return {
     success: true,
     data: {
-      user: { _id: savedUser._id, ...savedUser._doc },
+      coordinates,
+      state,
+      city,
+      country,
+      zip,
+      address,
     },
-    token: token
   };
 };
 
-// export const registerLaunderer = async (params) => {
-//   const {
-//     email,
-//     password,
-//     phone,
-//     firstName,
-//     lastName,
-//     service,
-//     image,
-//     coordinates,
-//     address
-//   } = params;
+export const identityVerification = async (params) => {
+  const { drivingLicense, authorizedId, user } = params;
 
-//   const userExists = await usersModel.findOne({ email });
+  const laundererObj = {};
 
-//   if (userExists) {
-//     return {
-//       success: false,
-//       message: "Email already exists",
-//     };
-//   }
+  if (drivingLicense) {
+    laundererObj.drivingLicense = {
+      path: drivingLicense,
+    };
+  } else {
+    throw new Error("please upload driver's license ||| 400");
+  }
 
-//     // Encrypt the password
-//     const hashedPassword = await bcrypt.hash(password, 10);
+  if (authorizedId) {
+    laundererObj.authorisedID = {
+      path: authorizedId,
+    };
+  } else {
+    throw new Error("please upload government authorized ID ||| 400");
+  }
 
-//     // Generate a random OTP
-//     const otp = otpGenerator.generate(6, {
-//       digits: true,
-//       upperCase: false,
-//       specialChars: false,
-//     });
+  console.log("laundererObj : ", laundererObj);
 
-//   // Create a new user
-//   const newUser = {
-//     email,
-//     password: hashedPassword,
-//     firstName,
-//     lastName,
-//     phone,
-//     otp,
-//     address,
-//     isLaunderer: true,
-//   };
+  const launderer = await launderersModel.findOne({ user: user });
 
-//   if (image) {
-//     newUser.image = {
-//       path: image,
-//     };
-//   }
+  if (!launderer) {
+    throw new Error("Launderer does not exist ||| 400");
+  }
 
-//   if (coordinates) {
-//     console.log(coordinates);
-//     newUser.location = {
-//       coordinates: coordinates,
-//     };
-//   }
+  const updatedLaunderer = await launderersModel.findOneAndUpdate(
+    { user: user },
+    laundererObj,
+    { new: true }
+  );
 
-//   const savedUser = await usersModel.create(newUser);
+  console.log("updatedLaunderer: ", updatedLaunderer);
 
-//   const laundererObj = {};
+  const updateObj = {
+    authStepsCompleted: "identity_verification",
+  };
 
-//   if (savedUser._id) {
-//     laundererObj.user = savedUser._id;
-//   }
+  const profileUpdate = await usersModel.findByIdAndUpdate(user, updateObj, {
+    new: true,
+  });
 
-//   const addLaunderer = await launderersModel.create(laundererObj);
+  return {
+    success: true,
+  };
+};
 
-//   console.log(addLaunderer);
+export const serviceAreaSelection = async (params) => {
+  const { user, zip, coordinates, radius } = params;
 
-//   return {
-//     addLaunderer,
-//   };
-// };
+  // Update the laundererModel
+  const updatedLaunderer = await launderersModel.findOneAndUpdate(
+    { user: user },
+    { zip: zip, coordinates: coordinates, radius: radius },
+    { new: true }
+  );
+
+  // Update the usersModel
+  const updatedUser = await usersModel.findOneAndUpdate(
+    { _id: user },
+    { authStepsCompleted: "service_areas_selection" },
+    { new: true }
+  );
+
+  return {
+    success: true,
+    radius: radius,
+    coordinates: coordinates,
+    zip: zip
+  };
+};
+
+
+export const w9FormSubmission = async (params) => {
+  const { user, image } = params;
+
+  const launderer = await launderersModel.findOne({ user: user });
+
+  if (!launderer) {
+    throw new Error("Launderer does not exist ||| 400");
+  }
+
+  const laundererObj = {};
+
+  if (image) {
+    laundererObj.w9Form = {
+      path: image,
+    };
+  } else {
+    throw new Error("Please upload filled w9 form ||| 400");
+  }
+
+  console.log("laundererObj : ",laundererObj)
+
+  const updatedLaunderer = await launderersModel.findOneAndUpdate(
+    { user: user },
+    { w9Form: image },
+    { new: true }
+  );
+  
+  console.log("updatedLaunderer : ", updatedLaunderer)
+
+  const updateObj = {
+    authStepsCompleted: "w9_form_submission",
+  };
+
+  const profileUpdate = await usersModel.findByIdAndUpdate(user, updateObj, {
+    new: true,
+  });
+
+  return {
+    success: true,
+  };
+};
+
 
 export const login = async (params) => {
   const { email, password } = params;
 
-  const user = await usersModel.findOne({ email });
+  const user = await usersModel.findOne({ email }).select("+password");
+
+  console.log("USER : ", user);
 
   if (!user) {
-    return {
-      success: false,
-      message: "User not found",
-    };
+    throw new Error("User doesn't exist ||| 400");
   }
 
   // Verify the password
   const isPasswordValid = await bcrypt.compare(password, user.password);
-  console.log(password, user.password)
+  console.log(password, user.password, isPasswordValid);
 
   if (!isPasswordValid) {
-    return {
-      success: false,
-      message: "Incorrect password",
-    };
+    throw new Error("Incorrect password ||| 400");
   }
 
   // Password is valid, return user data
   return {
     success: true,
-    data: user,
+    token: user.token,
   };
 };
 
 export const sendAgainOTP = async (params) => {
-  // 1. check is userId exists
-  // 2. generate a new OTP and update that in the database of that user
-  // 3. send that new OTP in response
-
   const { user } = params;
 
-  const newOTP = otpGenerator.generate(6, {
+  const existingUser = await usersModel.findById(user);
+
+  const otp = otpGenerator.generate(4, {
     digits: true,
     upperCase: false,
     specialChars: false,
+    alphabets: false,
   });
 
-  const updatedUser = await usersModel.findOneAndUpdate(
-    { _id: user },
-    { $set: { otp: newOTP } },
-    { new: true, projection: { otp: 1 } }
-  );
+  // Update the OTP in the user object
+  existingUser.otp = otp;
+
+  // Save the updated user object to the database
+  const updatedUser = await existingUser.save();
+
+  console.log("updatedUser otp --------------> ", otp);
 
   return {
     success: true,
-    updatedUser,
   };
 };
 
-
 export const verifyOTP = async (params) => {
-  // 1. recieve OTP and userId from frontend
+  // 1. recieve OTP and from frontend
   // 2. check if userId exists
   // 3. check if OTP from frontend matches OTP stored in the document of that user
   // return success if matches, else return fals with message "invalid OTP"
@@ -303,17 +469,11 @@ export const verifyOTP = async (params) => {
   const checkUser = await usersModel.findOne({ _id: user });
 
   if (!checkUser) {
-    return {
-      success: false,
-      message: "User not found",
-    };
+    throw new Error("User not found ||| 400");
   }
 
   if (checkUser.otp !== otp) {
-    return {
-      success: false,
-      message: "Invalid OTP",
-    };
+    throw new Error("Invalid OTP ||| 400");
   }
 
   return {

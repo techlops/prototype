@@ -14,58 +14,28 @@ const { ATTACHMENTS_DIRECTORY } = directories;
 // variable initializations
 const router = express.Router();
 
-router
-  .route("/")
-  .all(verifyToken, verifyUser)
-  .post(
-    upload(ATTACHMENTS_DIRECTORY).array("attachments", 8),
-    asyncHandler(async (req, res) => {
-      const { _id: userFrom, name: username } = req?.user;
-      const { user: userTo, text } = req.body;
-      const attachments = req.files || [];
-      const args = {
-        userFrom,
-        username,
-        userTo,
-        text,
-        attachments,
-      };
-      const response = await messagesController.send(args);
-      res.json(response);
-    })
-  )
-  .get(
-    asyncHandler(async (req, res) => {
-      const { _id: user1 } = req.user;
-      const { conversation, limit, page, user: user2 } = req.query;
-      const args = {
-        conversation,
-        user1,
-        user2,
-        limit: Number(limit),
-        page: Number(page),
-      };
-      const response = await messagesController.getMessages(args);
-      res.json(response);
-    })
-  )
-  .put(
-    asyncHandler(async (req, res) => {
-      const { message, text, status } = req.body;
-      const args = { message, text, status };
-      const response = await messagesController.updateMessage(args);
-      res.json(response);
-    })
-  )
-  .patch(
-    asyncHandler(async (req, res) => {
-      const { _id } = req?.user;
-      const { conversation } = req.body;
-      const args = { conversation, userTo: _id };
-      const response = await messagesController.readMessages(args);
-      res.json(response);
-    })
-  );
+router.post(
+  "/sendMessage",
+  verifyToken,
+  upload(ATTACHMENTS_DIRECTORY).array("attachments", 8),
+  asyncHandler(async (req, res) => {
+    const {userTo} = req.query
+    const userFrom = req.user;
+    const {text} = req.body;
+    const attachments = req.files || [];
+    const arg = {
+      text,
+      attachments,
+      userFrom,
+      userTo,
+      // conversation
+    };
+
+    console.log(arg)
+    const response = await messagesController.sendMessage(arg)
+    res.json(response)
+  })
+);
 
 router.get(
   "/conversations",

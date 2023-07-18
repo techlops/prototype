@@ -27,8 +27,159 @@ const { ObjectId } = Types;
  * @param {[object]} attachments message attachments
  * @returns {Object} message data
  */
-export const addMessage = async (params) => {
-  const { userFrom, userTo, text, attachments, conversation } = params;
+export const getConversations = async (params) => {
+  const { user } = params;
+  const objectId = mongoose.Types.ObjectId(user);
+
+  const query = {
+    $or: [{ userTo: { $eq: objectId } }, { userFrom: { $eq: objectId } }],
+  };
+
+  let { limit, page } = params;
+  if (!limit) limit = 10;
+  if (!page) page = 0;
+  if (page) page = page - 1;
+
+  const conversations = await conversationsModel.aggregate([
+    { $match: query },
+    {
+      $lookup: {
+        from: "messages",
+        localField: "lastMessage",
+        foreignField: "_id",
+        as: "lastMessage",
+      },
+    },
+    {
+      $unwind: "$lastMessage",
+    },
+    {
+      $project: {
+        userId: {
+          $cond: [{ $ne: ["$userTo", objectId] }, "$userTo", "$userFrom"],
+        },
+        lastMessage: {
+          text: "$lastMessage.text",
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: "profiles",
+        localField: "userId",
+        foreignField: "user",
+        as: "profile",
+      },
+    },
+    {
+      $unwind: "$profile",
+    },
+    {
+      $project: {
+        _id: 1,
+        userId: 1,
+        name: "$profile.name",
+        lastMessage: "$lastMessage.text",
+      },
+    },
+    {
+      $facet: {
+        totalCount: [{ $count: "totalCount" }],
+        data: [{ $skip: page * limit }, { $limit: limit }],
+      },
+    },
+    { $unwind: "$totalCount" },
+    {
+      $project: {
+        totalCount: "$totalCount.totalCount",
+        totalPages: {
+          $ceil: {
+            $divide: ["$totalCount.totalCount", limit],
+          },
+        },
+        data: 1,
+      },
+    },
+  ]);
+
+  return {
+    success: true,
+    totalCount: conversations[0].totalCount,
+    totalPages: conversations[0].totalPages,
+    chats: conversations[0].data.map(({ _id, userId, name, lastMessage }) => ({
+      _id,
+      userId,
+      name,
+      lastMessage,
+    })),
+  };
+};
+
+export const getChat = async (params) => {
+  const { conversation } = params;
+  let { page, limit, user1, user2 } = params;
+  if (!limit) limit = 10;
+  if (!page) page = 0;
+  if (page) page = page - 1;
+
+  const query = {};
+  if (conversation) {
+    query.conversation = mongoose.Types.ObjectId(conversation);
+  } else {
+    throw new Error("Please enter conversation id!|||400");
+  }
+
+  const totalCount = await messagesModel.countDocuments(query);
+
+  console.log("query:", query);
+
+  const data = await messagesModel
+    .find(query)
+    .sort({ createdAt: -1 })
+    .skip(page * limit)
+    .limit(limit)
+    .select({ createdAt: 0, updatedAt: 0, __v: 0 });
+
+  const totalPages = Math.ceil(totalCount / limit);
+
+  return {
+    success: true,
+    data,
+    totalCount,
+    totalPages,
+  };
+};
+
+export const sendMessage = async (params) => {
+  const { text, attachments } = params;
+  let { userTo, userFrom } = params;
+  userTo = ObjectId(userTo);
+  userFrom = ObjectId(userFrom);
+
+  console.log("userTo : ", userTo);
+  console.log("userFrom : ", userFrom);
+
+
+  let conversation;
+
+  let checkIfConversationExists = await conversationsModel.findOne({
+    $or: [
+      { userTo, userFrom },
+      { userTo: userFrom, userFrom: userTo },
+    ],
+  });
+  if (checkIfConversationExists) {
+    conversation = checkIfConversationExists._id;
+  } else {
+    const conversationObj = {};
+    conversationObj.userTo = userTo;
+    conversationObj.userFrom = userFrom;
+    checkIfConversationExists = await conversationsModel.create(
+      conversationObj
+    );
+    conversation = checkIfConversationExists._id;
+  }
+
   const messageObj = {};
 
   if (userFrom) messageObj.userFrom = userFrom;
@@ -48,292 +199,52 @@ export const addMessage = async (params) => {
   }
 
   const message = await messagesModel.create(messageObj);
-  return { success: true, data: message };
-};
 
-/**
- * @description Get chat messages
- * @param {String} conversation conversation id
- * @param {Number} limit messages limit
- * @param {Number} page messages page number
- * @param {String} text message text
- * @param {[object]} attachments OPTIONAL message attachments
- * @returns {Object} message data
- */
-export const getMessages = async (params) => {
-  const { conversation } = params;
-  let { page, limit, user1, user2 } = params;
-  if (!limit) limit = 10;
-  if (!page) page = 0;
-  if (page) page = page - 1;
-  const query = {};
-  if (conversation) query.conversation = ObjectId(conversation);
-  else if (user1 && user2) {
-    user1 = ObjectId(user1);
-    user2 = ObjectId(user2);
-    query.$or = [
-      { $and: [{ userTo: user1 }, { userFrom: user2 }] },
-      { $and: [{ userFrom: user1 }, { userTo: user2 }] },
-    ];
-  } else throw new Error("Please enter conversation id!|||400");
-  const messages = await messagesModel.aggregate([
-    { $match: query },
-    { $sort: { createdAt: -1 } },
-    { $project: { createdAt: 0, updatedAt: 0, __v: 0 } },
-    {
-      $facet: {
-        totalCount: [{ $count: "totalCount" }],
-        data: [{ $skip: page * limit }, { $limit: limit }],
-      },
-    },
-    { $unwind: "$totalCount" },
-    {
-      $project: {
-        totalCount: "$totalCount.totalCount",
-        totalPages: {
-          $ceil: {
-            $divide: ["$totalCount.totalCount", limit],
-          },
-        },
-        data: 1,
-      },
-    },
-  ]);
-  return {
-    success: true,
-    data: [],
-    totalCount: 0,
-    totalPages: 0,
-    ...messages[0],
-  };
-};
+  checkIfConversationExists.lastMessage = message._id;
+  checkIfConversationExists.markModified("lastMessage");
+  await checkIfConversationExists.save();
 
-/**
- * @description Update message data
- * @param {String} message message id
- * @param {String} text message text
- * @param {String} status message status
- * @returns {Object} message data
- */
-export const updateMessage = async (params) => {
-  const { message, text, status } = params;
-  const messageObj = {};
-  if (message);
-  else throw new Error("Please enter message id!|||400");
-  if (isValidObjectId(message));
-  else throw new Error("Please enter valid message id!|||400");
-  if (text) messageObj.text = text;
-  if (status) messageObj.status = status;
-  const messageExists = await messagesModel.findByIdAndUpdate(
-    { _id: message },
-    messageObj,
-    {
-      new: true,
-    }
-  );
-  if (messageExists);
-  else throw new Error("Message not found!|||404");
-  return {
-    success: true,
-    data: messageExists,
-  };
-};
+  console.log("message.userTo : ", message.userTo)
 
-/**
- * @description Delete message
- * @param {String} message message id
- * @returns {Object} message data
- */
-export const deleteMessage = async (params) => {
-  const { message } = params;
-  if (message);
-  else throw new Error("Please enter message id!|||400");
-  const messageExists = await messagesModel.findByIdAndDelete(message);
-  if (messageExists);
-  else throw new Error("Please enter valid message id!|||400");
-  return {
-    success: true,
-    data: messageExists,
-  };
-};
-
-/**
- * @description Get user conversations
- * @param {String} user user id
- * @param {Number} limit conversations limit
- * @param {Number} page conversations page number
- * @returns {[Object]} array of conversations
- */
-export const getConversations = async (params) => {
-  const { user, q } = params;
-  let { limit, page } = params;
-  if (!limit) limit = 10;
-  if (!page) page = 0;
-  if (page) page = page - 1;
-  const query = {};
-  if (user) query.$or = [{ userTo: user }, { userFrom: user }];
-  const keyword = q ? q.toString().trim() : "";
-
-  const conversations = await conversationsModel.aggregate([
-    { $match: query },
-    {
-      $lookup: {
-        from: "messages",
-        localField: "lastMessage",
-        foreignField: "_id",
-        as: "lastMessage",
-        pipeline: [
-          {
-            $project: {
-              text: 1,
-              userFrom: 1,
-              createdAt: 1,
-              "attachments.type": 1,
-            },
-          },
-        ],
-      },
-    },
-    {
-      $unwind: { path: "$lastMessage" },
-    },
-    { $sort: { "lastMessage.createdAt": -1 } },
-    {
-      $project: {
-        user: {
-          $cond: {
-            if: { $eq: ["$userTo", user] },
-            then: "$userFrom",
-            else: "$userTo",
-          },
-        },
-        lastMessage: 1,
-      },
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "user",
-        foreignField: "_id",
-        as: "user",
-        pipeline: [
-          { $match: { name: { $regex: keyword, $options: "i" } } },
-          {
-            $project: {
-              name: 1,
-              image: 1,
-            },
-          },
-        ],
-      },
-    },
-    {
-      $unwind: { path: "$user" },
-    },
-    {
-      $facet: {
-        totalCount: [{ $count: "totalCount" }],
-        data: [{ $skip: page * limit }, { $limit: limit }],
-      },
-    },
-    { $unwind: "$totalCount" },
-    {
-      $project: {
-        totalCount: "$totalCount.totalCount",
-        totalPages: {
-          $ceil: {
-            $divide: ["$totalCount.totalCount", limit],
-          },
-        },
-        data: 1,
-      },
-    },
-  ]);
-  return {
-    success: true,
-    data: [],
-    totalCount: 0,
-    totalPages: 0,
-    ...conversations[0],
-  };
-};
-
-/**
- * @description Send message
- * @param {String} userFrom sender user id
- * @param {String} userTo receiver user id
- * @param {String} text message text
- * @param {[object]} attachments message attachments
- * @returns {Object} message data
- */
-export const send = async (params) => {
-  const { userFrom, userTo, username } = params;
-  let conversation;
-  const query = {
-    $or: [
-      { $and: [{ userTo: userFrom }, { userFrom: userTo }] },
-      { $and: [{ userFrom }, { userTo }] },
-    ],
-  };
-
-  let conversationExists = await conversationsModel.findOne(query);
-  if (conversationExists) {
-    conversation = conversationExists._id;
-    if (conversationExists.status === PENDING) {
-      if (userFrom.equals(conversationExists.userTo)) {
-        conversationExists.status = ACCEPTED;
-        await conversationExists.save();
-      }
-    } else if (conversationExists.status === REJECTED)
-      throw new Error("Conversation request rejected!|||400");
-  } else {
-    const conversationObj = {};
-    conversationObj.userTo = userTo;
-    conversationObj.userFrom = userFrom;
-    conversationExists = await conversationsModel.create(conversationObj);
-    conversation = conversationExists._id;
-  }
-
-  const args = { ...params, conversation };
-  const { data: message } = await addMessage(args);
-
-  conversationExists.lastMessage = message._id;
-  await conversationExists.save();
 
   // socket event emission
   await new SocketManager().emitEvent({
     to: message.userTo.toString(),
     event: "newMessage_" + message.conversation,
-    data: message,
+    data: message
   });
 
-  const notificationObj = {
-    user: message.userTo,
-    message: message._id,
-    messenger: message.userFrom,
-    type: NEW_MESSAGE,
-  };
+  // const userToExists = await usersModel.findById(message.userTo).select("fcms");
 
-  // database notification addition
-  await notificationsController.addNotification(notificationObj);
+  // const fam = userToExists.fcms
 
-  const userToExists = await usersModel.findById(message.userTo).select("fcms");
-  const fcms = [];
-  userToExists.fcms.forEach((element) => fcms.push(element.token));
+  // console.log("fammmmmmmmmmmmmmmmm",fam)
 
-  const title = "New Message";
-  const body = `New message from ${username}`;
-  const type = NEW_MESSAGE;
+  // const fcmArray = fam.map((item) => item.fcm);
 
-  // firebase notification emission
-  await new FirebaseManager().notify({
-    fcms,
-    title,
-    body,
-    data: {
-      type,
-    },
-  });
+  // console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+
+  // let fcms = []
+
+  // fcms = fcmArray;
+
+
+  // const title = "titleeeeeeeeee";
+  // const body = `bodyyyyyyyyyyy`;
+  // const type = NEW_MESSAGE;
+
+
+  // // firebase notification emission
+  // await new FirebaseManager().notify({
+  //   fcms,
+  //   title,
+  //   body,
+  //   data: {
+  //     type,
+  //   },
+  // });
+
 
   return { success: true, data: message };
 };

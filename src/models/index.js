@@ -10,6 +10,9 @@ import contactUsMessage from "./contact-us-mesaages.js";
 import constants from "./constants.js";
 import orderRequestDeclines from "./order-request-declines.js";
 import orderLogs from "./order-logs.js";
+import customerLocations from "./customer-locations.js";
+import notifications from "./notifications.js";
+import services from "./services.js";
 
 export default {
   bagSizesModel: bagSizes,
@@ -23,6 +26,9 @@ export default {
   contactUsMessageModel: contactUsMessage,
   constantsModel: constants,
   orderRequestDeclinesModel: orderRequestDeclines,
-  orderLogsModel: orderLogs
+  orderLogsModel: orderLogs,
+  customerLocationsModel: customerLocations,
+  notificationsModel: notifications,
+  servicesModel: services
 };
 
