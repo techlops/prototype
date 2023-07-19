@@ -18,7 +18,7 @@ const {
   constantsModel,
   orderRequestDeclinesModel,
   orderLogsModel,
-  notificationsModel
+  notificationsModel,
 } = models;
 
 // LAUNDERER
@@ -126,13 +126,15 @@ export const nearbyPendingOrderRequests = async (params) => {
   console.log("user : ", user);
 
   // Fetch the location of the user from the usersModel collection
-  const findUser = await usersModel.findOne({ _id: user });
+  const findUser = await launderersModel.findOne({ user: user });
   console.log("findUser Location : ", findUser.location.coordinates);
 
   const coordinates = findUser.location.coordinates;
 
   // Define the radius (in meters) for the search
-  const radius = 20 * 1609.34; // 20 miles converted to meters
+  let radius = findUser.radius;
+  console.log("radius : ", radius);
+  radius = radius * 1609.34;
 
   // Fetch the IDs of orders declined by the launderer
   const declinedOrderIds = await orderRequestDeclinesModel
@@ -140,8 +142,26 @@ export const nearbyPendingOrderRequests = async (params) => {
     .distinct("order");
 
   // Find nearby orders within the specified radius and not declined by the launderer
-  const nearbyOrders = await ordersModel
-    .find({
+
+  // const nearbyOrders = await ordersModel.find(
+  //   {
+  //     customLocation: {
+  //       $near: {
+  //         $geometry: {
+  //           type: "Point",
+  //           coordinates: coordinates,
+  //         },
+  //         // $maxDistance: radius
+  //       },
+  //     },
+  //     _id: { $nin: declinedOrderIds },
+  //   },
+  //   // Specify the fields to include in the response
+  //   { address: 1, time: 1 }
+  // );
+
+  const nearbyOrders = await ordersModel.find(
+    {
       customLocation: {
         $near: {
           $geometry: {
@@ -152,8 +172,11 @@ export const nearbyPendingOrderRequests = async (params) => {
         },
       },
       _id: { $nin: declinedOrderIds },
-    })
-    .populate("orderBags");
+      status: "pending", // Add this condition to find only orders with status "pending"
+    },
+    // Specify the fields to include in the response
+    { address: 1, time: 1 }
+  );
 
   return {
     success: true,
@@ -161,89 +184,28 @@ export const nearbyPendingOrderRequests = async (params) => {
   };
 };
 
-export const laundererOrderRequestAcceptOriginal = async (params) => {
-  const { order, user, accept } = params;
-
-  // Check if the order substatus is 'pending'
-  const checkOrder = await ordersModel.findOne({
-    _id: order,
-    subStatus: "pending",
-  });
-
-  if (!checkOrder) {
-    throw new Error("Invalid order or substatus is not pending");
-  }
-
-  try {
-    if (accept) {
-      // Update the order status to 'confirmed' and assign the launderer
-      const accept = await ordersModel.findByIdAndUpdate(order, {
-        subStatus: "confirmed",
-        status: "upcoming",
-        launderer: user,
-      });
-
-      const customer = checkOrder.customer;
-      console.log("customer : ", customer)
-
-      const notificationObj = {};
-
-      if (user) notificationObj.user = user;
-      notificationObj.step = "order_request_accepted"
-      if (message) notificationObj.message = message;
-      if (messenger) notificationObj.messenger = messenger;
-    
-      const notification = await notificationsModel.create(notificationObj);
-      // return { success: true, data: notification };
-
-      await new SocketManager().emitEvent({
-        to: customer.toString(),
-        event: "user_" + accept._id,
-        data: accept
-      });
-
-
-
-      return {
-        success: true,
-        message: "Order accepted successfully",
-      };
-    } else {
-      throw new Error("Invalid operation. Accept parameter must be true.");
-      // Create a document in orderRequestDeclinesModel to record the order rejection
-      //  await orderRequestDeclinesModel.create({ launderer: user, order });
-    }
-  } catch (error) {
-    throw new Error("Error updating order status: " + error.message);
-  }
-};
-
 export const laundererOrderRequestDecline = async (params) => {
   const { order, user } = params;
 
-  try {
-    const existingDecline = await orderRequestDeclinesModel.findOne({
-      launderer: user,
-      order: order,
-    });
+  const existingDecline = await orderRequestDeclinesModel.findOne({
+    launderer: user,
+    order: order,
+  });
 
-    if (existingDecline) {
-      throw new Error("Order already declined by this launderer");
-    }
-
-    const newDecline = await orderRequestDeclinesModel.create({
-      launderer: user,
-      order: order,
-    });
-
-    return {
-      success: true,
-      message: "Order declined successfully",
-      data: newDecline,
-    };
-  } catch (error) {
-    throw new Error("Error declining order: " + error.message);
+  if (existingDecline) {
+    throw new Error("Order already declined by this launderer ||| 400");
   }
+
+  const newDecline = await orderRequestDeclinesModel.create({
+    launderer: user,
+    order: order,
+  });
+
+  return {
+    success: true,
+    message: "Order declined successfully",
+    data: newDecline,
+  };
 };
 
 export const laundererOrderRequestAccept = async (params) => {
@@ -256,53 +218,56 @@ export const laundererOrderRequestAccept = async (params) => {
   });
 
   if (!checkOrder) {
-    throw new Error("Invalid order or substatus is not pending");
+    throw new Error("Invalid order or substatus is not pending ||| 400");
   }
 
-  try {
-    if (accept) {
-      // Update the order status to 'confirmed' and assign the launderer
-      const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-        subStatus: "confirmed",
-        status: "upcoming",
-        launderer: user,
-      });
+  if (accept) {
+    // Update the order status to 'confirmed' and assign the launderer
+    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+      subStatus: "confirmed",
+      status: "upcoming",
+      launderer: user,
+    });
 
-      const notificationObj = {};
+    const notificationObj = {};
 
-      notificationObj.user = updatedOrder.customer;
-      notificationObj.step = "order_request_accepted";
-      notificationObj.order = updatedOrder.order;
+    notificationObj.user = updatedOrder.customer;
+    notificationObj.step = "order_request_accepted";
+    notificationObj.order = updatedOrder.order;
 
-      const notification = await notificationsModel.create(notificationObj);
-      const unreadCount = await notificationsModel.count({
-        user: updatedOrder.customer,
-        status: "unread",
-      });
+    const notification = await notificationsModel.create(notificationObj);
+    const unreadCount = await notificationsModel.count({
+      user: updatedOrder.customer,
+      status: "unread",
+    });
 
-      // notifications count emit 
-      await new SocketManager().emitEvent({
-        to: updatedOrder.customer.toString(),
-        event: "user_" + updatedOrder.customer,
-        data: unreadCount
-      });
+    const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+      { _id: updatedOrder.customer },
+      { $inc: { unreadNotifications: 1 } },
+      { new: true }
+    );
 
+    console.log(
+      "unreadNotifications : ",
+      updateCustomerNotifications.unreadNotifications
+    );
+    // notifications count emit
+    await new SocketManager().emitEvent({
+      to: updatedOrder.customer.toString(),
+      event: "user_" + updatedOrder.customer,
+      data: unreadCount,
+    });
 
-
-      return {
-        success: true,
-        message: "Order accepted successfully",
-      };
-    } else {
-      throw new Error("Invalid operation. Accept parameter must be true.");
-      // Create a document in orderRequestDeclinesModel to record the order rejection
-      //  await orderRequestDeclinesModel.create({ launderer: user, order });
-    }
-  } catch (error) {
-    throw new Error("Error updating order status: " + error.message);
+    return {
+      success: true,
+      message: "Order accepted successfully",
+    };
+  } else {
+    throw new Error("Invalid operation. Accept parameter must be true ||| 400");
+    // Create a document in orderRequestDeclinesModel to record the order rejection
+    //  await orderRequestDeclinesModel.create({ launderer: user, order });
   }
 };
-
 
 export const startService = async (params) => {
   const { order, user } = params;
@@ -314,61 +279,51 @@ export const startService = async (params) => {
   });
 
   if (!checkOrder) {
-    throw new Error("Invalid order or substatus is not confirmed");
+    throw new Error("Invalid order or substatus is not confirmed ||| 403");
   }
 
-  try {
-    // Update the order status to 'confirmed' and assign the launderer
-    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "started",
-      status: "in_progress",
-    });
+  // Update the order status to 'confirmed' and assign the launderer
+  const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+    subStatus: "started",
+    status: "in_progress",
+  });
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "started",
-      actor: user,
-      actorType: "launderer",
-      createdAt: new Date(),
-    });
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "started",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
 
-    await orderLog.save();
+  await orderLog.save();
 
+  const notificationObj = {};
 
-    const notificationObj = {};
+  notificationObj.user = updatedOrder.customer;
+  notificationObj.step = "order_started";
+  notificationObj.order = updatedOrder.order;
 
-    notificationObj.user = updatedOrder.customer;
-    notificationObj.step = "order_started";
-    notificationObj.order = updatedOrder.order;
+  const notification = await notificationsModel.create(notificationObj);
+  await notification.save();
+  const unreadCount = await notificationsModel.count({
+    user: updatedOrder.customer,
+    status: "unread",
+  });
 
-    const notification = await notificationsModel.create(notificationObj);
-    await notification.save();
-    const unreadCount = await notificationsModel.count({
-      user: updatedOrder.customer,
-      status: "unread",
-    });
+  console.log("UNREAD COUNT AT START SERVICE: ", unreadCount);
 
-    console.log("UNREAD COUNT AT START SERVICE: ", unreadCount)
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "user_" + updatedOrder.customer,
+    data: unreadCount,
+  });
 
-    // notifications count emit 
-    await new SocketManager().emitEvent({
-      to: updatedOrder.customer.toString(),
-      event: "user_" + updatedOrder.customer,
-      data: unreadCount
-    });
-
-    return {
-      success: true,
-      message: "Order started successfully",
-      data: updatedOrder,
-      orderLog,
-    };
-  } catch (error) {
-    throw new Error("Error starting order: " + error.message);
-  }
+  return {
+    success: true,
+  };
 };
-
-
 
 export const laundererOnWay = async (params) => {
   const { order, user, coordinates } = params;
@@ -380,65 +335,57 @@ export const laundererOnWay = async (params) => {
   });
 
   if (!checkOrder) {
-    throw new Error("Invalid order or substatus is not started");
+    throw new Error("Invalid order or substatus is not started ||| 400");
   }
 
-  try {
-    // Update the order status to 'confirmed' and assign the launderer
-    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "coming_for_pickup",
-      status: "in_progress",
-    });
+  // Update the order status to 'confirmed' and assign the launderer
+  const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+    subStatus: "coming_for_pickup",
+    status: "in_progress",
+  });
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "coming_for_pickup",
-      actor: user,
-      actorType: "launderer",
-      createdAt: new Date(),
-    });
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "coming_for_pickup",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
 
-    await orderLog.save();
+  await orderLog.save();
 
-    // sockets
-    // send coordinates to customer id from orders table through sockets
-    // make an event and have the customer listen to that event
+  // sockets
+  // send coordinates to customer id from orders table through sockets
+  // make an event and have the customer listen to that event
 
-    const notificationObj = {};
+  const notificationObj = {};
 
-    notificationObj.user = updatedOrder.customer;
-    notificationObj.step = "launderer_coming";
-    notificationObj.order = updatedOrder.order;
+  notificationObj.user = updatedOrder.customer;
+  notificationObj.step = "launderer_coming";
+  notificationObj.order = updatedOrder.order;
 
-    const notification = await notificationsModel.create(notificationObj);
-    await notification.save();
-    const unreadCount = await notificationsModel.count({
-      user: updatedOrder.customer,
-      status: "unread",
-    });
+  const notification = await notificationsModel.create(notificationObj);
+  await notification.save();
+  const unreadCount = await notificationsModel.count({
+    user: updatedOrder.customer,
+    status: "unread",
+  });
 
-    console.log("UNREAD COUNT AT ON MY WAY : ", unreadCount)
-    
-    // notifications count emit 
-    await new SocketManager().emitEvent({
-      to: updatedOrder.customer.toString(),
-      event: "user_" + updatedOrder.customer,
-      data: unreadCount
-    });
- 
+  console.log("UNREAD COUNT AT ON MY WAY : ", unreadCount);
 
-    // socket orderlogs to customer
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "user_" + updatedOrder.customer,
+    data: unreadCount,
+  });
 
-    return {
-      success: true,
-      message: "Order status updated successfully to 'On My Way'",
-      data: updatedOrder,
-    };
-  } catch (error) {
-    throw new Error("Error starting order: " + error.message);
-  }
+  // socket orderlogs to customer
+
+  return {
+    success: true,
+  };
 };
-
 
 export const laundererReachedLocation = async (params) => {
   const { order, user, coordinates } = params;
@@ -451,61 +398,50 @@ export const laundererReachedLocation = async (params) => {
 
   if (!checkOrder) {
     throw new Error(
-      "Invalid order or substatus has not be updated to 'On My Way'"
+      "Invalid order or substatus has not be updated to 'On My Way' ||| 403"
     );
   }
 
-  try {
-    // Update the order status to 'confirmed' and assign the launderer
-    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "reached_location",
-      status: "in_progress",
-    });
+  // Update the order status to 'confirmed' and assign the launderer
+  const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+    subStatus: "reached_location",
+    status: "in_progress",
+  });
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "reached_location",
-      actor: user,
-      actorType: "launderer",
-      createdAt: new Date(),
-    });
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "reached_location",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
 
-    await orderLog.save();
+  await orderLog.save();
 
-    const notificationObj = {};
+  const notificationObj = {};
 
-    notificationObj.user = updatedOrder.customer;
-    notificationObj.step = "llaunderer_reached";
-    notificationObj.order = updatedOrder.order;
+  notificationObj.user = updatedOrder.customer;
+  notificationObj.step = "launderer_reached";
+  notificationObj.order = updatedOrder.order;
 
-    const notification = await notificationsModel.create(notificationObj);
-    await notification.save();
-    const unreadCount = await notificationsModel.count({
-      user: updatedOrder.customer,
-      status: "unread",
-    });
+  const notification = await notificationsModel.create(notificationObj);
+  await notification.save();
+  const unreadCount = await notificationsModel.count({
+    user: updatedOrder.customer,
+    status: "unread",
+  });
 
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "user_" + updatedOrder.customer,
+    data: unreadCount,
+  });
 
-    
-
-    // notifications count emit 
-    await new SocketManager().emitEvent({
-      to: updatedOrder.customer.toString(),
-      event: "user_" + updatedOrder.customer,
-      data: unreadCount
-    });
-
-    return {
-      success: true,
-      message: "Order status updated successfully to 'Location Reached'",
-      data: updatedOrder,
-      orderLog,
-    };
-  } catch (error) {
-    throw new Error("Error starting order: " + error.message);
-  }
+  return {
+    success: true,
+  };
 };
-
 
 export const pickupLocationSelect = async (params) => {
   const { order, user, images, pickUpType } = params;
@@ -517,44 +453,49 @@ export const pickupLocationSelect = async (params) => {
 
   if (!checkOrder) {
     throw new Error(
-      "Invalid order or substatus has not be updated to 'Location Reached' by User"
+      "Invalid order or substatus has not be updated to 'Location Reached' by User ||| 403"
     );
   }
 
-  try {
-    const updateOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "pickup_location_selected",
-      status: "in_progress",
-      beforeWorkPictures: images,
-      pickupLocation: pickUpType,
-    });
+  const beforeWorkPictures = []; // Create an array to store the images
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "pickup_location_selected",
-      actor: user,
-      actorType: "launderer",
-      createdAt: new Date(),
-    });
-
-    await orderLog.save();
-
-    return {
-      success: true,
-      message:
-        "Pick up location successfully added & Images before starting work successfully added",
-      data: updateOrder,
-      orderLog,
-    };
-  } catch (error) {
-    throw new Error("Error starting order: " + error.message);
+  for (let i = 0; i < images.length; i++) {
+    const bagImagePath = images[i];
+    beforeWorkPictures.push({ path: bagImagePath }); // Push the image path into the array
   }
+
+  const updateOrder = await ordersModel.findByIdAndUpdate(
+    order,
+    {
+      $set: {
+        beforeWorkPictures, // Update the beforeWorkPictures field
+        subStatus: "pickup_location_selected",
+        status: "in_progress",
+        pickupLocation: pickUpType,
+      },
+    },
+    { new: true }
+  );
+
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "pickup_location_selected",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
+
+  await orderLog.save();
+
+  return {
+    success: true,
+  };
 };
 
 export const clothesInDryer = async (params) => {
   const { order, user } = params;
 
-  // Check if the order substatus is 'pending'
+  // Check if the order substatus is 'pickup_location_selected'
   const checkOrder = await ordersModel.findOne({
     _id: order,
     subStatus: "pickup_location_selected",
@@ -562,37 +503,29 @@ export const clothesInDryer = async (params) => {
 
   if (!checkOrder) {
     throw new Error(
-      "Invalid order or substatus has not be updated to 'pickup_location_selected'"
+      "Invalid order or substatus has not be updated to 'pickup_location_selected' ||| 403"
     );
   }
 
-  try {
-    // Update the order status to 'confirmed' and assign the launderer
-    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "clothes_in_dryer",
-      status: "in_progress",
-    });
+  // Update the order status to 'clothes_in_dryer' and assign the launderer
+  const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+    subStatus: "clothes_in_dryer",
+    status: "in_progress",
+  });
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "clothes_in_dryer",
-      actor: user,
-      actorType: "launderer",
-      createdAt: new Date(),
-    });
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "clothes_in_dryer",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
 
-    await orderLog.save();
+  await orderLog.save();
 
-    return {
-      success: true,
-      message:
-        "Order status updated successfully updated to 'clothes_in_dryer'",
-      data: updatedOrder,
-      orderLog,
-    };
-  } catch (error) {
-    throw new Error("Error updating order: " + error.message);
-  }
+  return {
+    success: true,
+  };
 };
 
 export const clothesFolding = async (params) => {
@@ -606,42 +539,35 @@ export const clothesFolding = async (params) => {
 
   if (!checkOrder) {
     throw new Error(
-      "Invalid order or substatus has not be updated to 'pickup_location_selected'"
+      "Invalid order or current substatus is not 'pickup_location_selected' ||| 403"
     );
   }
 
-  try {
-    // Update the order status to 'confirmed' and assign the launderer
-    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "clothes_folding",
-      status: "in_progress",
-    });
+  // Update the order status to 'confirmed' and assign the launderer
+  const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+    subStatus: "clothes_folding",
+    status: "in_progress",
+  });
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "clothes_folding",
-      actor: user,
-      actorType: "launderer",
-      createdAt: new Date(),
-    });
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "clothes_folding",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
 
-    await orderLog.save();
+  await orderLog.save();
 
-    return {
-      success: true,
-      message: "Order status successfully updated to 'clothes_folding'",
-      data: updatedOrder,
-      orderLog,
-    };
-  } catch (error) {
-    throw new Error("Error updating order: " + error.message);
-  }
+  return {
+    success: true,
+  };
 };
 
 export const clothesDelivery = async (params) => {
   const { order, user } = params;
 
-  // Check if the order substatus is 'pending'
+  // Check if the order substatus is 'clothes_folding'
   const checkOrder = await ordersModel.findOne({
     _id: order,
     subStatus: "clothes_folding",
@@ -649,40 +575,33 @@ export const clothesDelivery = async (params) => {
 
   if (!checkOrder) {
     throw new Error(
-      "Invalid order or substatus has not be updated to 'pickup_location_selected'"
+      "Invalid order or current substatus is not 'clothes_folding' ||| 403"
     );
   }
 
-  try {
-    // Update the order status to 'confirmed' and assign the launderer
-    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "clothes_delivery",
-      status: "in_progress",
-    });
+  // Update the order status to 'clothes_delivery' and assign the launderer
+  const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+    subStatus: "clothes_delivery",
+    status: "in_progress",
+  });
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "clothes_delivery",
-      actor: user,
-      actorType: "launderer",
-      createdAt: new Date(),
-    });
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "clothes_delivery",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
 
-    await orderLog.save();
+  await orderLog.save();
 
-    return {
-      success: true,
-      message: "Order status successfully updated to 'clothes_delivery'",
-      data: updatedOrder,
-      orderLog,
-    };
-  } catch (error) {
-    throw new Error("Error updating order: " + error.message);
-  }
+  return {
+    success: true,
+  };
 };
 
 export const submitWork = async (params) => {
-  const { order, user, feedback, images } = params;
+  const { order, user, feedback, images, dropOffType } = params;
 
   // Check if the order substatus is 'pending'
   const checkOrder = await ordersModel.findOne({
@@ -692,38 +611,44 @@ export const submitWork = async (params) => {
 
   if (!checkOrder) {
     throw new Error(
-      "Invalid order or substatus has not be updated to 'clothes_delivery'"
+      "Invalid order or current substatus is not 'clothes_delivery' ||| 403"
     );
   }
 
-  try {
-    // Update the order status to 'confirmed' and assign the launderer
-    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "work_submitted",
-      status: "completed",
-      laundererFeedback: feedback,
-      afterWorkPictures: images,
-    });
+  const afterWorkPictures = []; // Create an array to store the images
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "work_submitted",
-      actor: user,
-      actorType: "launderer",
-      createdAt: new Date(),
-    });
-
-    await orderLog.save();
-
-    return {
-      success: true,
-      message: "Order status successfully updated to 'work_submitted'",
-      data: updatedOrder,
-      orderLog,
-    };
-  } catch (error) {
-    throw new Error("Error updating order: " + error.message);
+  for (let i = 0; i < images.length; i++) {
+    const bagImagePath = images[i];
+    afterWorkPictures.push({ path: bagImagePath }); // Push the image path into the array
   }
+
+  const updateOrder = await ordersModel.findByIdAndUpdate(
+    order,
+    {
+      $set: {
+        afterWorkPictures, // Update the beforeWorkPictures field
+        subStatus: "work_submitted",
+        status: "completed",
+        dropOffLocation: dropOffType,
+        laundererFeedback: feedback,
+      },
+    },
+    { new: true }
+  );
+
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "work_submitted",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
+
+  await orderLog.save();
+
+  return {
+    success: true,
+  };
 };
 
 // retrieve only count of all orders of per day in a given month and year which are assigned to launderer.
@@ -829,28 +754,24 @@ export const inProgressOrders = async (params) => {
     status: "in_progress",
   };
 
-  try {
-    const totalCount = await ordersModel.countDocuments(query);
-    const totalPages = Math.ceil(totalCount / limit);
-    const skipCount = (page - 1) * limit;
+  const totalCount = await ordersModel.countDocuments(query);
+  const totalPages = Math.ceil(totalCount / limit);
+  const skipCount = (page - 1) * limit;
 
-    const orders = await ordersModel
-      .find(query)
-      .select("totalAmount status address time")
-      .skip(skipCount)
-      .limit(limit);
+  const orders = await ordersModel
+    .find(query)
+    .select("totalAmount status address time")
+    .skip(skipCount)
+    .limit(limit);
 
-    return {
-      success: true,
-      data: {
-        orders,
-        totalCount,
-        totalPages,
-      },
-    };
-  } catch (error) {
-    throw new Error("Error fetching in-progress orders: " + error.message);
-  }
+  return {
+    success: true,
+    data: {
+      orders,
+      totalCount,
+      totalPages,
+    },
+  };
 };
 
 export const upcomingOrders = async (params) => {
@@ -865,28 +786,24 @@ export const upcomingOrders = async (params) => {
     status: "upcoming",
   };
 
-  try {
-    const totalCount = await ordersModel.countDocuments(query);
-    const totalPages = Math.ceil(totalCount / limit);
-    const skipCount = (page - 1) * limit;
+  const totalCount = await ordersModel.countDocuments(query);
+  const totalPages = Math.ceil(totalCount / limit);
+  const skipCount = (page - 1) * limit;
 
-    const orders = await ordersModel
-      .find(query)
-      .select("totalAmount status address time")
-      .skip(skipCount)
-      .limit(limit);
+  const orders = await ordersModel
+    .find(query)
+    .select("totalAmount status address time")
+    .skip(skipCount)
+    .limit(limit);
 
-    return {
-      success: true,
-      data: {
-        orders,
-        totalCount,
-        totalPages,
-      },
-    };
-  } catch (error) {
-    throw new Error("Error fetching upcoming orders: " + error.message);
-  }
+  return {
+    success: true,
+    data: {
+      orders,
+      totalCount,
+      totalPages,
+    },
+  };
 };
 
 export const completedOrders = async (params) => {
@@ -901,28 +818,24 @@ export const completedOrders = async (params) => {
     status: "completed",
   };
 
-  try {
-    const totalCount = await ordersModel.countDocuments(query);
-    const totalPages = Math.ceil(totalCount / limit);
-    const skipCount = (page - 1) * limit;
+  const totalCount = await ordersModel.countDocuments(query);
+  const totalPages = Math.ceil(totalCount / limit);
+  const skipCount = (page - 1) * limit;
 
-    const orders = await ordersModel
-      .find(query)
-      .select("totalAmount status address time")
-      .skip(skipCount)
-      .limit(limit);
+  const orders = await ordersModel
+    .find(query)
+    .select("totalAmount status address time")
+    .skip(skipCount)
+    .limit(limit);
 
-    return {
-      success: true,
-      data: {
-        orders,
-        totalCount,
-        totalPages,
-      },
-    };
-  } catch (error) {
-    throw new Error("Error fetching completed orders: " + error.message);
-  }
+  return {
+    success: true,
+    data: {
+      orders,
+      totalCount,
+      totalPages,
+    },
+  };
 };
 
 export const cancelledOrders = async (params) => {
@@ -937,152 +850,139 @@ export const cancelledOrders = async (params) => {
     status: "cancelled",
   };
 
-  try {
-    const totalCount = await ordersModel.countDocuments(query);
-    const totalPages = Math.ceil(totalCount / limit);
-    const skipCount = (page - 1) * limit;
+  const totalCount = await ordersModel.countDocuments(query);
+  const totalPages = Math.ceil(totalCount / limit);
+  const skipCount = (page - 1) * limit;
 
-    const orders = await ordersModel
-      .find(query)
-      .select("totalAmount status address time")
-      .skip(skipCount)
-      .limit(limit);
+  const orders = await ordersModel
+    .find(query)
+    .select("totalAmount status address time")
+    .skip(skipCount)
+    .limit(limit);
 
-    return {
-      success: true,
-      data: {
-        orders,
-        totalCount,
-        totalPages,
-      },
-    };
-  } catch (error) {
-    throw new Error("Error fetching completed orders: " + error.message);
-  }
+  return {
+    success: true,
+    data: {
+      orders,
+      totalCount,
+      totalPages,
+    },
+  };
 };
 
 export const orderLogs = async (params) => {
   const { order, user } = params;
+  // Fetch all order logs for the specified order
+  const logs = await orderLogsModel
+    .find({ order: order })
+    .select("order actor actorType action createdAt");
 
-  try {
-    // Fetch all order logs for the specified order
-    const logs = await orderLogsModel
-      .find({ order: order })
-      .select("order actor actorType action createdAt");
-
-    return {
-      success: true,
-      data: logs,
-    };
-  } catch (error) {
-    throw new Error("Error fetching order logs: " + error.message);
-  }
+  return {
+    success: true,
+    data: logs,
+  };
 };
 
 export const laundererDetails = async (params) => {
-  const {user} = params
+  const { user } = params;
   const objectId = mongoose.Types.ObjectId(user);
-  try {
-    const user = await usersModel.aggregate([
-      { $match: { _id: objectId } }, // Match the user by id
-      {
-        $lookup: {
-          from: "orders", // join with order collection
-          localField: "_id",
-          foreignField: "launderer",
-          as: "orders",
-        },
+  const userDetails = await usersModel.aggregate([
+    { $match: { _id: objectId } }, // Match the user by id
+    {
+      $lookup: {
+        from: "orders", // join with order collection
+        localField: "_id",
+        foreignField: "launderer",
+        as: "orders",
       },
-      {
-        $lookup: {
-          from: "launderers", // join with order collection
-          localField: "_id",
-          foreignField: "user",
-          as: "launderers",
-        },
+    },
+    {
+      $lookup: {
+        from: "launderers", // join with order collection
+        localField: "_id",
+        foreignField: "user",
+        as: "launderers",
       },
-      {
-        $addFields: {
-          earnedThisMonth: {
-            $map: {
-              input: {
-                $filter: {
-                  input: "$orders",
-                  as: "order",
-                  cond: {
-                    $and: [
-                      { $eq: ["$$order.status", "feedback_submitted"] },
-                      {
-                        $gte: [
-                          { $toDate: "$$order.time" },
-                          new Date(
-                            new Date().getFullYear(),
-                            new Date().getMonth() - 1,
-                            1
-                          ),
-                        ],
-                      },
-                    ],
-                  },
+    },
+    {
+      $addFields: {
+        earnedThisMonth: {
+          $map: {
+            input: {
+              $filter: {
+                input: "$orders",
+                as: "order",
+                cond: {
+                  $and: [
+                    { $eq: ["$$order.subStatus", "feedback_submitted"] },
+                    {
+                      $gte: [
+                        { $toDate: "$$order.time" },
+                        new Date(
+                          new Date().getFullYear(),
+                          new Date().getMonth() - 1,
+                          1
+                        ),
+                      ],
+                    },
+                  ],
                 },
               },
-              as: "filteredOrder",
+            },
+            as: "filteredOrder",
+            in: {
+              $add: [
+                "$$filteredOrder.laundererTotal",
+                "$$filteredOrder.tipAmount",
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        user: {
+          name: "$name",
+          image: "$image",
+          _id: "$_id",
+        },
+        avgRating: { $avg: "$launderers.avgRating" },
+        ratingsCount: { $sum: "$launderers.ratingsCount" },
+        recievedOrders: { $size: "$orders" }, // Count the size of the orders array
+        completedOrders: {
+          $size: {
+            $filter: {
+              input: "$orders",
+              cond: { $eq: ["$$this.subStatus", "feedback_submitted"] },
+            },
+          },
+        },
+        // checking total earnings of this month
+        earnedOverall: {
+          $sum: {
+            $map: {
+              input: "$orders",
+              as: "order",
               in: {
-                $add: [
-                  "$$filteredOrder.laundererTotal",
-                  "$$filteredOrder.tipAmount",
+                $cond: [
+                  { $eq: ["$$order.launderer", "$_id"] }, // Check if the launderer ID matches
+                  { $add: ["$$order.laundererTotal", "$$order.tipAmount"] }, // Add laundererTotal and tipAmount
+                  0, // Otherwise, add 0
                 ],
               },
             },
           },
         },
+        earnedThisMonth: { $sum: "$earnedThisMonth" },
       },
-      {
-        $project: {
-          user: {
-            name: "$name",
-            image: "$image",
-            _id: "$_id",
-          },  
-          avgRating: { $avg: "$launderers.avgRating" },
-          ratingsCount: { $sum: "$launderers.ratingsCount" },
-          recievedOrders: { $size: "$orders" }, // Count the size of the orders array
-          completedOrders: {
-            $size: {
-              $filter: {
-                input: "$orders",
-                cond: { $eq: ["$$this.status", "feedback_submitted"] },
-              },
-            },
-          },
-          // checking total earnings of this month
-          earnedOverall: {
-            $sum: {
-              $map: {
-                input: "$orders",
-                as: "order",
-                in: {
-                  $cond: [
-                    { $eq: ["$$order.launderer", "$_id"] }, // Check if the launderer ID matches
-                    { $add: ["$$order.laundererTotal", "$$order.tipAmount"] }, // Add laundererTotal and tipAmount
-                    0, // Otherwise, add 0
-                  ],
-                },
-              },
-            },
-          },
-          earnedThisMonth: { $sum: "$earnedThisMonth" },
-        },
-      },
-    ]);
+    },
+  ]);
 
-    const month = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    console.log("gteeeeeeeeeeeeeeeeeee", month);
+  const month = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  console.log("gteeeeeeeeeeeeeeeeeee", month);
 
-    console.log(user, "i am hereeeeee");
+  console.log(user, "i am hereeeeee");
 
-    return user; // Return the first (and only) result
-  } catch (error) {
-    throw new Error("Failed to retrieve user details.");
-  }
+  return userDetails; // Return the first (and only) result
 };

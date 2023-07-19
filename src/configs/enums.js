@@ -70,6 +70,7 @@ export const ORDER_STATUSES = {
   CLOTHES_FOLDING: "clothes_folding",
   CLOTHES_DELIVERY: "clothes_delivery",
   // Completed
+  COMPLETED: "completed",
   WORK_SUBMITTED: "work_submitted",
   FEEDBACK_SUBMITTED: "feedback_submitted",
   // Cancelled

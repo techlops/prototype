@@ -13,6 +13,8 @@ import orderLogs from "./order-logs.js";
 import customerLocations from "./customer-locations.js";
 import notifications from "./notifications.js";
 import services from "./services.js";
+import faq from "./faq.js";
+import customerComplaints from "./customer-complaints.js";
 
 export default {
   bagSizesModel: bagSizes,
@@ -29,6 +31,8 @@ export default {
   orderLogsModel: orderLogs,
   customerLocationsModel: customerLocations,
   notificationsModel: notifications,
-  servicesModel: services
+  servicesModel: services,
+  faqModel: faq,
+  customerComplaintsModel: customerComplaints
 };
 

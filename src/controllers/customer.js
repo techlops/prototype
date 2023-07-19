@@ -30,6 +30,8 @@ const {
   orderRequestDeclinesModel,
   orderLogsModel,
   customerLocationsModel,
+  faqModel,
+  customerComplaintsModel
 } = models;
 
 // add new locations
@@ -229,9 +231,9 @@ export const getBagSizes = async (params) => {
 
 // total amount calculate before order placing
 export const calculateTotalAmount = async (params) => {
-  const { bags, lflBagsCount } = params;
+  const { bagSizes, lflBagsCount } = params;
 
-  console.log("params : ", params)
+  console.log("params : ", params);
 
   const [lflBagAndDeliveryFee] = await constantsModel.aggregate([
     { $match: { title: { $in: [LFL_BAG_PRICE, DELIVERY_FEE] } } },
@@ -275,8 +277,8 @@ export const calculateTotalAmount = async (params) => {
 
   let finalPrice = 0;
 
-  for (let i = 0; i < bags.length; i++) {
-    const bagId = bags[i];
+  for (let i = 0; i < bagSizes.length; i++) {
+    const bagId = bagSizes[i];
 
     // Fetch bag price from the bagsModel for the current ID in the bags array
     const bagPrice = await bagSizesModel.findOne({ _id: bagId });
@@ -287,17 +289,17 @@ export const calculateTotalAmount = async (params) => {
     }
   }
 
-  const lflBagsPrice = lflBagPrice * lflBagsCount
+  const lflBagsPrice = lflBagPrice * lflBagsCount;
 
-  const totalPriceBeforeDeliveryFee = finalPrice + lflBagsPrice
+  const totalPriceBeforeDeliveryFee = finalPrice + lflBagsPrice;
 
-  const finalAmount = totalPriceBeforeDeliveryFee + deliveryFeePrice
+  const finalAmount = totalPriceBeforeDeliveryFee + deliveryFeePrice;
 
   return {
     success: true,
     deliveryFee: deliveryFeePrice,
     totalPriceBeforeDelivery: totalPriceBeforeDeliveryFee,
-    totalAmount: finalAmount
+    totalAmount: finalAmount,
   };
 };
 
@@ -305,10 +307,8 @@ export const calculateTotalAmount = async (params) => {
 export const requestServiceOrder = async (params) => {
   const {
     bags,
-    totalAmount,
     coordinates,
     lflBagsCount,
-    deliveryFee,
     user,
     zip,
     address,
@@ -318,6 +318,8 @@ export const requestServiceOrder = async (params) => {
     bagImages,
     time,
   } = params;
+
+  const bagSizes = [];
 
   // Iterate over the bags and bagImages simultaneously
   for (let i = 0; i < bags.length; i++) {
@@ -329,12 +331,26 @@ export const requestServiceOrder = async (params) => {
       images: bagImagePaths.map((path) => ({ path })),
       temperatureSettings: bag.temperatureSettings,
       spinSettings: bag.spinSettings,
-      price: bag.price,
+      bagSize: bag.bagSize,
     });
 
     // Store the orderBag._id in the bags array of the ordersModel document
     bags[i] = orderBag._id;
+
+    // pushing bagsize values into an array to use later to calculat total amount
+    bagSizes.push(bag.bagSize);
   }
+
+  const calculateTotalParams = {
+    bagSizes: bagSizes,
+    lflBagsCount: lflBagsCount,
+  };
+
+  // Call calculateTotalAmount function using the params object
+  const totalAmountResponse = await calculateTotalAmount(calculateTotalParams);
+
+  const totalAmount = totalAmountResponse.totalAmount;
+  const deliveryFee = totalAmountResponse.deliveryFee;
 
   // Create the ordersModel document
   const order = await ordersModel.create({
@@ -370,22 +386,18 @@ export const requestServiceOrder = async (params) => {
     { _id: 1 } // Projection to return only the _id field
   );
 
-  console.log("usersWithinRadius : ", usersWithinRadius);
-
   for (const user of usersWithinRadius) {
     console.log("launderers within 20 miles ", user);
   }
 
   return {
     success: true,
-    data: order,
   };
 };
 
+// track your order
 export const trackOrder = async (params) => {
   const { order, user } = params;
-
-  try {
     // Find the order and fetch the status
     const trackedOrder = await ordersModel.findById(order, "status");
 
@@ -397,36 +409,34 @@ export const trackOrder = async (params) => {
       success: true,
       data: trackedOrder.status,
     };
-  } catch (error) {
-    throw new Error("Error tracking order: " + error.message);
-  }
 };
 
+// cancel order
 export const cancelOrder = async (params) => {
   const { user, order } = params;
 
-  try {
-    // Find the order and update the status to 'cancelled'
-    const cancelledOrder = await ordersModel.findByIdAndUpdate(
-      order,
-      { $set: { status: "cancelled" } },
-      { new: true }
-    );
+  // Find the order and update the status to 'cancelled'
+  const cancelledOrder = await ordersModel.findOneAndUpdate(
+    {
+      _id: order,
+      status: { $nin: ["completed", "cancelled"] }
+    },
+    { $set: { status: "cancelled" } },
+    { new: true }
+  );
+  
 
-    // Check if the order has a launderer
-    if (cancelledOrder.launderer) {
-      console.log("Launderer:", cancelledOrder.launderer);
-    }
-
-    return {
-      success: true,
-      data: cancelledOrder,
-    };
-  } catch (error) {
-    throw new Error("Error cancelling order: " + error.message);
+  // Check if the order has a launderer
+  if (!cancelledOrder) {
+    throw new Error ("Cannot cancel a completed or already cancelled order ||| 403")
   }
+
+  return {
+    success: true,
+  };
 };
 
+// give feedback to launderer on order
 export const feedbackSubmit = async (params) => {
   const { order, user, tip, review, rating } = params;
 
@@ -442,35 +452,55 @@ export const feedbackSubmit = async (params) => {
     );
   }
 
-  try {
-    // Update the order status to 'confirmed' and assign the launderer
-    const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
-      subStatus: "feedback_submitted",
-      status: "completed",
-      subStatus: "feedback_submitted",
-      customerReview: review,
-      customerRating: rating,
-      isTipped: true,
-      tipAmount: tip,
-    });
+  // Update the order status to 'confirmed' and assign the launderer
+  const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+    subStatus: "feedback_submitted",
+    status: "completed",
+    customerReview: review,
+    customerRating: rating,
+    isTipped: true,
+    tipAmount: tip,
+  });
 
-    const orderLog = new orderLogsModel({
-      order: order,
-      action: "feedback_submitted",
-      actor: user,
-      actorType: "customer",
-      createdAt: new Date(),
-    });
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "feedback_submitted",
+    actor: user,
+    actorType: "customer",
+    createdAt: new Date(),
+  });
 
-    await orderLog.save();
+  await orderLog.save();
 
-    return {
-      success: true,
-      message: "Order status successfully updated to 'feedback_submitted'",
-      data: updatedOrder,
-      orderLog,
-    };
-  } catch (error) {
-    throw new Error("Error updating order: " + error.message);
-  }
+  return {
+    success: true,
+    customerReview: review,
+    customerRating: rating,
+  };
+};
+
+export const faq = async (params) => {
+  const faq = await faqModel.find({}, { question: 1, answer: 1, _id: 0 });
+
+  return {
+    success: true,
+    data: faq,
+  };
+};
+
+
+export const reportOrder = async (params) => {
+
+  const{order, user, complain} = params;
+
+  const report = await customerComplaintsModel.create({
+    customer: user,
+    order: order,
+    problem: complain
+  });
+
+  return {
+    success: true,
+    problem: complain
+  };
 };

@@ -130,11 +130,11 @@ router.patch(
     const user = req.user;
     const { order } = req.params;
     const { pickUpType } = req.query;
-    const images = req.files.map((file) => path.basename(file.path));
+
+    const images = req.files ? req.files.map((file) => path.basename(file.path)) : [];
+    const { feedback } = req.body;
 
     const args = { user, order, images, pickUpType };
-
-    console.log("images : ", images);
 
     const response = await laundererController.pickupLocationSelect(args);
 
@@ -194,13 +194,16 @@ router.patch(
 router.patch(
   "/submit-work/:order",
   verifyToken,
+  upload(IMAGES_DIRECTORY).any(),
   asyncHandler(async (req, res) => {
     const user = req.user;
+    const { dropOffType } = req.query;
     const { order } = req.params;
-    const images = req.files.map((file) => path.basename(file.path));
+
+    const images = req.files ? req.files.map((file) => path.basename(file.path)) : [];
     const { feedback } = req.body;
 
-    const args = { user, order, feedback, images };
+    const args = { user, order, feedback, images, dropOffType };
 
     const response = await laundererController.submitWork(args);
 

@@ -153,7 +153,16 @@ const userSchema = new Schema(
       type: String,
       trim: true,
     },
-
+    unreadNotifications: {
+      type: Number,
+      trim: true,
+      default: 0
+    },
+    unreadMessages: {
+      type: Number,
+      trim: true,
+      default: 0
+    }
   },
   {
     timestamps: true,

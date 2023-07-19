@@ -119,6 +119,7 @@ router.get(
     const user = req.user;
     console.log("req.user : ", user);
     const args = { user };
+    console.log("HXXXXXXXXXXXXXXXXXKXKXKXKXKXKXKXKXKXKXKX ------------------")
 
     const response = await ordersController.nearbyPendingOrderRequests(args);
     res.json(response);

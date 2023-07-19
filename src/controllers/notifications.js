@@ -160,12 +160,19 @@ export const notifyUsers = async (params) => {
  */
 export const readNotifications = async (params) => {
   const { user } = params;
+  console.log("user : ", user)
   const notificationObj = { status: READ };
   if (user);
   else throw new Error("Please enter user id!|||400");
   if (await usersModel.exists({ _id: user }));
   else throw new Error("Please enter valid user id!|||400");
   await notificationsModel.updateMany({ user }, notificationObj);
+  const updatedUser = await usersModel.findByIdAndUpdate(
+    user,
+    { unreadNotifications: 0 },
+    { new: true } // To return the updated user object
+  );
+
   return {
     success: true,
     message: "notifications read successfully!",

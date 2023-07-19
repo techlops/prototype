@@ -135,8 +135,8 @@ router.post(
   verifyToken,
   asyncHandler(async (req, res) => {
     const user = req.user;
-    const {bags, lflBagsCount}  = req.body;
-    const args = { user, bags, lflBagsCount };
+    const {bagSizes, lflBagsCount}  = req.body;
+    const args = { user, bagSizes, lflBagsCount };
 
     const response = await customerController.calculateTotalAmount(args);
     res.json(response);
@@ -166,8 +166,7 @@ router.post(
       country,
       time,
     } = req.body;
-    
-    console.log("bags : ", bags);
+
 
     // Prepare an array to store the bag images
     const bagImages = [];
@@ -183,9 +182,6 @@ router.post(
       );
       bagImages.push(bagImagePaths);
     });
-
-
-    console.log("bagImages : ", bagImages);
 
     const args = {
       bags,
@@ -208,14 +204,13 @@ router.post(
 );
 
 // feedback submit
-router.put(
+router.patch(
   "/submit-feedback/:order",
   verifyToken,
   asyncHandler(async (req, res) => {
     const user = req.user;
-    const tip = req.query;
     const { order } = req.params;
-    const { review, rating } = req.body;
+    const { review, rating, tip } = req.body;
 
     const args = { user, order, tip, review, rating };
 
@@ -254,6 +249,36 @@ router.get(
     res.json(response);
   })
 );
+
+// // report order
+router.post(
+  "/report-order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.query;
+    const {complain} = req.body;
+
+    const args = { user, order, complain };
+
+    const response = await customerController.reportOrder(args);
+
+    res.json(response);
+  })
+);
+
+// faq
+router.get(
+  "/faq",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const args = user
+
+    const response = await customerController.faq(args);
+    res.json(response);
+  })
+)
 
 
 // ///////////// THESE ARE LEFT /////////////////////////////

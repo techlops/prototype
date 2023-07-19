@@ -63,8 +63,9 @@ const orderSchema = new Schema(
         IN_PROGRESS,
         COMPLETED,
         PENDING,
-        CANCELLED
-      ]
+        CANCELLED,
+      ],
+      default: PENDING,
     },
     subStatus: {
     type: String,
@@ -171,7 +172,12 @@ const orderSchema = new Schema(
     laundererFeedback: {
       type: String,
       index: true,
-    }
+    },
+    // service: {
+    //   type: Schema.Types.ObjectId,
+    //   ref: "services",
+    //   index: true,
+    // },
   },
   {
     timestamps: true,

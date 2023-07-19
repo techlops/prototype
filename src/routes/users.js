@@ -1,20 +1,13 @@
 // module imports
 import express from "express";
-
-// file imports
-// import * as authController from "../controllers/auth.js";
-// import * as notificationsController from "../controllers/notifications.js";
 import * as usersController from "../controllers/users.js";
-// import TwilioManager from "../utils/twilio-manager.js";
+import * as notificationsController from "../controllers/notifications.js";
 import directories from "../configs/directories.js";
-// import { upload } from "../middlewares/uploader.js";
+import { upload } from "../middlewares/uploader.js";
 import { asyncHandler } from "../middlewares/async-handler.js";
+import path from "path";
 import {
-  verifyOTP,
   verifyToken,
-  verifyUser,
-  verifyAdmin,
-  verifyUserToken,
 } from "../middlewares/authenticator.js";
 
 // destructuring assignments
@@ -34,6 +27,36 @@ router.get(
     res.json(response);
   })
 );
+
+
+router.put(
+  "/edit-profile",
+  verifyToken,
+  upload(IMAGES_DIRECTORY).single("image"),
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { firstName, lastName, phone, phoneCode, coordinates, address } =
+      req.body;
+
+    // Get the uploaded image path
+    const imagePath =
+    req.file && req.file.path ? path.basename(req.file.path) : null;
+
+    const args = {
+      firstName,
+      lastName,
+      phone,
+      phoneCode,
+      image: imagePath, // Assign the image path to the "image" field
+      coordinates,
+      address,
+      user,
+    };
+
+    const response = await usersController.editProfile(args);
+    res.json(response);
+  })
+)
 
 
 
@@ -71,10 +94,8 @@ router
   )
   .patch(
     asyncHandler(async (req, res) => {
-      const { _id: user } = req?.user;
-      const args = {
-        user,
-      };
+      const  user  = req.user;
+      const args = { user };
       const response = await notificationsController.readNotifications(args);
       res.json(response);
     })

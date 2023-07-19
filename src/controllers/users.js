@@ -19,24 +19,83 @@ const { usersModel, customersModel, adminsModel } = models;
  * @returns {Object} user data
  */
 export const myProfile = async (params) => {
-
-  console.log("")
   const { user } = params;
-    
-  const userExists = await usersModel.findOne({_id: user});
-  if (userExists){
-    return{
-      success: true,
-      userExists
+
+  console.log("eheheheheh");
+
+  const userExists = await usersModel.findOne(
+    { _id: user },
+    {
+      location: 1,
+      _id: 1,
+      email: 1,
+      authStepsCompleted: 1,
+      isOnline: 1,
+      token: 1,
+      address: 1,
+      city: 1,
+      country: 1,
+      state: 1,
+      zip: 1,
+      firstname: 1,
+      lastname: 1,
+      image: 1,
+      phone: 1,
+      phoneCode: 1,
     }
+  );
+
+  if (userExists) {
+    return {
+      success: true,
+      userExists,
+    };
   }
-}
+};
 
 export const editProfile = async (params) => {
-  const {firstName, lastName, phoneNumber, address} = params;
-  
-}
+  const {
+    user,
+    firstName,
+    lastName,
+    phone,
+    phoneCode,
+    image,
+    coordinates,
+    address,
+  } = params;
 
+  console.log("HELOOOOOO")
+  const updateObj = {
+    firstName,
+    lastName,
+    phoneCode,
+    phone,
+    address,
+  };
+
+  if (image) {
+    updateObj.image = {
+      path: image,
+    };
+  }
+
+  if (coordinates) {
+    console.log(coordinates);
+    updateObj.location = {
+      coordinates: coordinates,
+    };
+  }
+
+  const profileUpdate = await usersModel.findByIdAndUpdate(user, updateObj, {
+    new: true,
+  });
+
+
+  return {
+    success: true,
+  };
+};
 
 export const addUser = async (params) => {
   const { email, password, phone, type } = params;
