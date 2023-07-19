@@ -1,5 +1,7 @@
 // module imports
 import { isValidObjectId, Types } from "mongoose";
+import mongoose from "mongoose";
+
 
 // file imports
 import SocketManager from "../utils/socket-manager.js";
@@ -28,17 +30,20 @@ const { ObjectId } = Types;
  * @returns {Object} message data
  */
 export const getConversations = async (params) => {
-  const { user } = params;
-  const objectId = mongoose.Types.ObjectId(user);
+  let { user, q } = params;
+  user = mongoose.Types.ObjectId(user);
+  // const ObjectId = mongoose.Types.ObjectId;
 
-  const query = {
-    $or: [{ userTo: { $eq: objectId } }, { userFrom: { $eq: objectId } }],
-  };
 
+
+  console.log(" user : ", user)
   let { limit, page } = params;
   if (!limit) limit = 10;
   if (!page) page = 0;
   if (page) page = page - 1;
+  const query = {};
+  if (user) query.$or = [{ userTo: user }, { userFrom: user }];
+  const keyword = q ? q.toString().trim() : "";
 
   const conversations = await conversationsModel.aggregate([
     { $match: query },
@@ -48,39 +53,53 @@ export const getConversations = async (params) => {
         localField: "lastMessage",
         foreignField: "_id",
         as: "lastMessage",
+        pipeline: [
+          {
+            $project: {
+              text: 1,
+              userFrom: 1,
+              createdAt: 1,
+              "attachments.type": 1,
+            },
+          },
+        ],
       },
     },
     {
-      $unwind: "$lastMessage",
+      $unwind: { path: "$lastMessage" },
     },
+    { $sort: { "lastMessage.createdAt": -1 } },
     {
       $project: {
-        userId: {
-          $cond: [{ $ne: ["$userTo", objectId] }, "$userTo", "$userFrom"],
+        user: {
+          $cond: {
+            if: { $eq: ["$userTo", user] },
+            then: "$userFrom",
+            else: "$userTo",
+          },
         },
-        lastMessage: {
-          text: "$lastMessage.text",
-        },
+        lastMessage: 1,
       },
     },
     {
       $lookup: {
-        from: "profiles",
-        localField: "userId",
-        foreignField: "user",
-        as: "profile",
+        from: "users",
+        localField: "user",
+        foreignField: "_id",
+        as: "user",
+        pipeline: [
+          { $match: { name: { $regex: keyword, $options: "i" } } },
+          {
+            $project: {
+              name: 1,
+              image: 1,
+            },
+          },
+        ],
       },
     },
     {
-      $unwind: "$profile",
-    },
-    {
-      $project: {
-        _id: 1,
-        userId: 1,
-        name: "$profile.name",
-        lastMessage: "$lastMessage.text",
-      },
+      $unwind: { path: "$user" },
     },
     {
       $facet: {
@@ -101,22 +120,19 @@ export const getConversations = async (params) => {
       },
     },
   ]);
-
   return {
     success: true,
-    totalCount: conversations[0].totalCount,
-    totalPages: conversations[0].totalPages,
-    chats: conversations[0].data.map(({ _id, userId, name, lastMessage }) => ({
-      _id,
-      userId,
-      name,
-      lastMessage,
-    })),
+    data: [],
+    totalCount: 0,
+    totalPages: 0,
+    ...conversations[0],
   };
 };
 
 export const getChat = async (params) => {
   const { conversation } = params;
+
+  console.log("messagessss")
   let { page, limit, user1, user2 } = params;
   if (!limit) limit = 10;
   if (!page) page = 0;
@@ -206,8 +222,22 @@ export const sendMessage = async (params) => {
 
   console.log("message.userTo : ", message.userTo)
 
+  // unread messages count increment
+  const updateUserMessages = await usersModel.findByIdAndUpdate(
+    { _id: message.userTo },
+    { $inc: { unreadMessages: 1 } },
+    { new: true }
+  );
 
-  // socket event emission
+  // unread messages count socket emission
+  await new SocketManager().emitEvent({
+    to:  message.userTo.toString(),
+    event: "unreadMessages_" +  message.userTo,
+    data: updateUserMessages.unreadMessages,
+  });
+
+
+  // live chat incoming messages socket emission
   await new SocketManager().emitEvent({
     to: message.userTo.toString(),
     event: "newMessage_" + message.conversation,
@@ -267,6 +297,11 @@ export const readMessages = async (params) => {
   if (await conversationsModel.exists({ _id: conversation }));
   else throw new Error("Please enter valid conversation id!|||400");
   await messagesModel.updateMany({ conversation, userTo }, messageObj);
+  const updatedUser = await usersModel.findByIdAndUpdate(
+    userTo,
+    { unreadMessages: 0 },
+    { new: true }
+  );
   return {
     success: true,
     message: "messages read successfully!",

@@ -14,14 +14,15 @@ const { ATTACHMENTS_DIRECTORY } = directories;
 // variable initializations
 const router = express.Router();
 
+// send message
 router.post(
-  "/sendMessage",
+  "/send-message",
   verifyToken,
   upload(ATTACHMENTS_DIRECTORY).array("attachments", 8),
   asyncHandler(async (req, res) => {
-    const {userTo} = req.query
     const userFrom = req.user;
-    const {text} = req.body;
+    const { userTo } = req.body;
+    const { text } = req.body;
     const attachments = req.files || [];
     const arg = {
       text,
@@ -31,24 +32,60 @@ router.post(
       // conversation
     };
 
-    console.log(arg)
-    const response = await messagesController.sendMessage(arg)
-    res.json(response)
+    console.log(" userTo : ", userTo);
+
+    const response = await messagesController.sendMessage(arg);
+    res.json(response);
   })
 );
 
+// get chat
+router.get(
+  "/chats",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    // const { _id: user1 } = req.user;
+    const { conversation, limit, page, user: user2 } = req.query;
+    const user1 = req.user;
+    const args = {
+      conversation,
+      user1,
+      user2,
+      limit: Number(limit),
+      page: Number(page),
+    };
+    const response = await messagesController.getChat(args);
+    res.json(response);
+  })
+);
+
+router.patch(
+  "/read-message",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const userTo = req.user;
+    const { conversation } = req.query;
+    const args = { conversation, userTo };
+    console.log("userTo : ", userTo)
+    console.log("conversation : ", conversation)
+
+    const response = await messagesController.readMessages(args);
+    res.json(response);
+  })
+);
+
+// get conversation
 router.get(
   "/conversations",
   verifyToken,
-  verifyUser,
   asyncHandler(async (req, res) => {
-    const { _id: user } = req?.user;
-    const { limit, page, q } = req.query;
+    const  user  = req.user;
+    const { limit, page,} = req.query;
+    console.log("user : ", user)
     const args = {
       user,
       limit: Number(limit),
-      page: Number(page),
-      q,
+      page: Number(page)
     };
     const response = await messagesController.getConversations(args);
     res.json(response);

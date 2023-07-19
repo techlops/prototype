@@ -121,6 +121,23 @@ export const laundererIdentityVerification = async (params) => {
   const { user } = params;
 };
 
+export const laundererToggleSwitch = async (params) => {
+  const { toggle, user } = params;
+  if ((toggle = true)) {
+    let laundererStatus = await launderersModel.findByIdAndUpdate(user, {
+      isOnline: true,
+    });
+  } else if ((toggle = false)) {
+    laundererStatus = await launderersModel.findByIdAndUpdate(user, {
+      isOnline: false,
+    });
+  }
+
+  return {
+    success: true,
+  };
+};
+
 export const nearbyPendingOrderRequests = async (params) => {
   const { user } = params;
   console.log("user : ", user);
@@ -234,12 +251,9 @@ export const laundererOrderRequestAccept = async (params) => {
     notificationObj.user = updatedOrder.customer;
     notificationObj.step = "order_request_accepted";
     notificationObj.order = updatedOrder.order;
+    notificationObj.status = "unread";
 
     const notification = await notificationsModel.create(notificationObj);
-    const unreadCount = await notificationsModel.count({
-      user: updatedOrder.customer,
-      status: "unread",
-    });
 
     const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
       { _id: updatedOrder.customer },
@@ -254,8 +268,8 @@ export const laundererOrderRequestAccept = async (params) => {
     // notifications count emit
     await new SocketManager().emitEvent({
       to: updatedOrder.customer.toString(),
-      event: "user_" + updatedOrder.customer,
-      data: unreadCount,
+      event: "unreadNotifications_" + updatedOrder.customer,
+      data: updateCustomerNotifications.unreadNotifications,
     });
 
     return {
@@ -303,21 +317,25 @@ export const startService = async (params) => {
   notificationObj.user = updatedOrder.customer;
   notificationObj.step = "order_started";
   notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
 
   const notification = await notificationsModel.create(notificationObj);
-  await notification.save();
-  const unreadCount = await notificationsModel.count({
-    user: updatedOrder.customer,
-    status: "unread",
-  });
 
-  console.log("UNREAD COUNT AT START SERVICE: ", unreadCount);
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
 
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "user_" + updatedOrder.customer,
-    data: unreadCount,
+    event: "unreadNotifications_" + updatedOrder.customer,
+    data: updateCustomerNotifications.unreadNotifications,
   });
 
   return {
@@ -363,21 +381,25 @@ export const laundererOnWay = async (params) => {
   notificationObj.user = updatedOrder.customer;
   notificationObj.step = "launderer_coming";
   notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
 
   const notification = await notificationsModel.create(notificationObj);
-  await notification.save();
-  const unreadCount = await notificationsModel.count({
-    user: updatedOrder.customer,
-    status: "unread",
-  });
 
-  console.log("UNREAD COUNT AT ON MY WAY : ", unreadCount);
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
 
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
     event: "user_" + updatedOrder.customer,
-    data: unreadCount,
+    data: updateCustomerNotifications.unreadNotifications,
   });
 
   // socket orderlogs to customer
@@ -423,19 +445,25 @@ export const laundererReachedLocation = async (params) => {
   notificationObj.user = updatedOrder.customer;
   notificationObj.step = "launderer_reached";
   notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
 
   const notification = await notificationsModel.create(notificationObj);
-  await notification.save();
-  const unreadCount = await notificationsModel.count({
-    user: updatedOrder.customer,
-    status: "unread",
-  });
 
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
+
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "user_" + updatedOrder.customer,
-    data: unreadCount,
+    event: "unreadNotifications_" + updatedOrder.customer,
+    data: updateCustomerNotifications.unreadNotifications,
   });
 
   return {
@@ -487,12 +515,38 @@ export const pickupLocationSelect = async (params) => {
 
   await orderLog.save();
 
+  const notificationObj = {};
+
+  notificationObj.user = updateOrder.customer;
+  notificationObj.step = "pickup_location_selected";
+  notificationObj.order = updateOrder.order;
+  notificationObj.status = "unread";
+
+  const notification = await notificationsModel.create(notificationObj);
+
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updateOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
+
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "unreadNotifications_" + updateOrder.customer,
+    data: updateCustomerNotifications.unreadNotifications,
+  });
+
   return {
     success: true,
   };
 };
 
-export const clothesInDryer = async (params) => {
+export const clothesInWasher = async (params) => {
   const { order, user } = params;
 
   // Check if the order substatus is 'pickup_location_selected'
@@ -504,6 +558,68 @@ export const clothesInDryer = async (params) => {
   if (!checkOrder) {
     throw new Error(
       "Invalid order or substatus has not be updated to 'pickup_location_selected' ||| 403"
+    );
+  }
+
+  // Update the order status to 'clothes_in_dryer' and assign the launderer
+  const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
+    subStatus: "clothes_in_washer",
+    status: "in_progress",
+  });
+
+  const orderLog = new orderLogsModel({
+    order: order,
+    action: "clothes_in_washer",
+    actor: user,
+    actorType: "launderer",
+    createdAt: new Date(),
+  });
+
+  await orderLog.save();
+
+  const notificationObj = {};
+
+  notificationObj.user = updatedOrder.customer;
+  notificationObj.step = "clothes_in_washer";
+  notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
+
+  const notification = await notificationsModel.create(notificationObj);
+
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
+
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "unreadNotifications_" + updatedOrder.customer,
+    data: updateCustomerNotifications.unreadNotifications,
+  });
+
+  return {
+    success: true,
+  };
+};
+
+export const clothesInDryer = async (params) => {
+  const { order, user } = params;
+
+  // Check if the order substatus is 'pickup_location_selected'
+  const checkOrder = await ordersModel.findOne({
+    _id: order,
+    subStatus: "clothes_in_washer",
+  });
+
+  if (!checkOrder) {
+    throw new Error(
+      "Invalid order or substatus has not be updated to 'clothes in washer' ||| 403"
     );
   }
 
@@ -523,6 +639,32 @@ export const clothesInDryer = async (params) => {
 
   await orderLog.save();
 
+  const notificationObj = {};
+
+  notificationObj.user = updatedOrder.customer;
+  notificationObj.step = "clothes_in_dryer";
+  notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
+
+  const notification = await notificationsModel.create(notificationObj);
+
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
+
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "unreadNotifications_" + updatedOrder.customer,
+    data: updateCustomerNotifications.unreadNotifications,
+  });
+
   return {
     success: true,
   };
@@ -539,7 +681,7 @@ export const clothesFolding = async (params) => {
 
   if (!checkOrder) {
     throw new Error(
-      "Invalid order or current substatus is not 'pickup_location_selected' ||| 403"
+      "Invalid order or current substatus is not 'clothes in dryer' ||| 403"
     );
   }
 
@@ -558,6 +700,32 @@ export const clothesFolding = async (params) => {
   });
 
   await orderLog.save();
+
+  const notificationObj = {};
+
+  notificationObj.user = updatedOrder.customer;
+  notificationObj.step = "clothes_folding";
+  notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
+
+  const notification = await notificationsModel.create(notificationObj);
+
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
+
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "unreadNotifications_" + updatedOrder.customer,
+    data: updateCustomerNotifications.unreadNotifications,
+  });
 
   return {
     success: true,
@@ -595,6 +763,32 @@ export const clothesDelivery = async (params) => {
 
   await orderLog.save();
 
+  const notificationObj = {};
+
+  notificationObj.user = updatedOrder.customer;
+  notificationObj.step = "clothes_delivery";
+  notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
+
+  const notification = await notificationsModel.create(notificationObj);
+
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
+
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "unreadNotifications_" + updatedOrder.customer,
+    data: updateCustomerNotifications.unreadNotifications,
+  });
+
   return {
     success: true,
   };
@@ -622,7 +816,7 @@ export const submitWork = async (params) => {
     afterWorkPictures.push({ path: bagImagePath }); // Push the image path into the array
   }
 
-  const updateOrder = await ordersModel.findByIdAndUpdate(
+  const updatedOrder = await ordersModel.findByIdAndUpdate(
     order,
     {
       $set: {
@@ -645,6 +839,32 @@ export const submitWork = async (params) => {
   });
 
   await orderLog.save();
+
+  const notificationObj = {};
+
+  notificationObj.user = updatedOrder.customer;
+  notificationObj.step = "order_work_submitted";
+  notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
+
+  const notification = await notificationsModel.create(notificationObj);
+
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.customer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
+
+  console.log(
+    "unreadNotifications : ",
+    updateCustomerNotifications.unreadNotifications
+  );
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.customer.toString(),
+    event: "unreadNotifications_" + updatedOrder.customer,
+    data: updateCustomerNotifications.unreadNotifications,
+  });
 
   return {
     success: true,
@@ -985,4 +1205,49 @@ export const laundererDetails = async (params) => {
   console.log(user, "i am hereeeeee");
 
   return userDetails; // Return the first (and only) result
+};
+
+export const updateRealTimeLocation = async (params) => {
+  const { country, state, city, zip, coordinates, address, user, order } = params;
+
+  const orderCustomer = await ordersModel.findOne({_id: order})
+
+  const updateObj = {
+    state,
+    city,
+    country,
+    zip,
+    address,
+  };
+
+  if (coordinates) {
+    updateObj.location = {
+      coordinates: coordinates,
+    };
+  }
+
+  const profileUpdate = await launderersModel.findOneAndUpdate({_id: user}, updateObj, {
+    new: true,
+  });
+
+  await new SocketManager().emitEvent({
+    to: orderCustomer.customer.toString(),
+    event: "laundererCoordinates_" + orderCustomer.customer,
+    data: coordinates,
+  });
+
+  console.log("profile update : ", profileUpdate);
+
+  return {
+    success: true,
+    data: {
+      coordinates,
+      state,
+      city,
+      country,
+      zip,
+      address,
+    },
+  };
+
 };

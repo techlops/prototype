@@ -250,6 +250,30 @@ router.get(
   })
 );
 
+router.get(
+  "/current-orders",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const args = { user }
+
+    const response = await customerController.currentOrders(args);
+    res.json(response);
+  })
+);
+
+router.get(
+  "/previous-orders",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const args = { user }
+
+    const response = await customerController.previousOrders(args);
+    res.json(response);
+  })
+)
+
 // // report order
 router.post(
   "/report-order",
@@ -280,6 +304,39 @@ router.get(
   })
 )
 
+// contact us
+router.post(
+  "/contact-us",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.query;
+    const {text} = req.body;
+
+    const args = { user, text };
+
+    const response = await customerController.contactUsMessage(args);
+
+    res.json(response);
+  })
+);
+
+// faq
+router.get(
+  "/:constant",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const {constant} = req.params;
+    const args = {user, constant}
+
+    console.log("constant : ",constant)
+
+    const response = await customerController.termsAndConditions(args);
+    res.json(response);
+  })
+)
+
 
 // ///////////// THESE ARE LEFT /////////////////////////////
 
@@ -290,8 +347,6 @@ router.get(
 // // order details
 // router.get();
 
-// // report order
-// router.post();
 
 // // get launderer's current location after order status is changed to coming for pickup or coming for deliver
 // router.get();

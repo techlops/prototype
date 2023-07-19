@@ -322,6 +322,33 @@ router.get(
   })
 );
 
+router.post(
+  "/launderer/update-order-location",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+    const { country, state, city, zip, coordinates, address } = req.body;
+
+    const args = {
+      country,
+      state,
+      city,
+      zip,
+      coordinates,
+      address,
+      user,
+      order
+    };
+
+    const response = await laundererController.updateRealTimeLocation(args);
+    res.json(response);
+  })
+);
+
+
+
+
 
 
 export default router;

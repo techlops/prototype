@@ -58,6 +58,20 @@ router.put(
   })
 )
 
+router.patch(
+  "/set-online-status",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const  user  = req.user;
+    const {toggle} = req.body
+    console.log("toggle : ", toggle)
+    console.log("user : ", user)
+    const args = { user, toggle };
+    const response = await usersController.laundererToggleSwitch(args);
+    res.json(response);
+  })
+)
+
 
 
 

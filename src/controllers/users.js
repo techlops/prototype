@@ -8,7 +8,7 @@ import { USER_TYPES } from "../configs/enums.js";
 
 // destructuring assignments
 const { ADMIN } = USER_TYPES;
-const { usersModel, customersModel, adminsModel } = models;
+const { usersModel, customersModel, adminsModel, launderersModel } = models;
 
 /**
  * @description Add user
@@ -52,6 +52,26 @@ export const myProfile = async (params) => {
     };
   }
 };
+
+export const laundererToggleSwitch = async (params) => {
+  const {toggle, user} = params;
+  if(toggle === true){
+    let laundererStatus = await launderersModel.findOneAndUpdate(
+      { user: user },
+      { online: true }, 
+    );
+  }
+  else if (toggle === false){
+    let laundererStatus = await launderersModel.findOneAndUpdate(
+      { user: user }, 
+      { online: false }, 
+    );
+  }
+
+  return{
+    success: true
+  }
+}
 
 export const editProfile = async (params) => {
   const {

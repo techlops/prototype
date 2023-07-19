@@ -61,7 +61,7 @@ export const profileCompletionCustomer = async (params) => {
     address,
   } = params;
 
-  // Generate a random OTP
+  const name = `${firstName} ${lastName}`;
 
   // Generate a random OTP
   const otp = otpGenerator.generate(4, {
@@ -75,6 +75,7 @@ export const profileCompletionCustomer = async (params) => {
     authStepsCompleted: "profile_completion",
     firstName,
     lastName,
+    name,
     phoneCode,
     phone,
     otp,
@@ -178,6 +179,9 @@ export const profileCompletionLaunderer = async (params) => {
     address,
   } = params;
 
+  const name = `${firstName} ${lastName}`;
+
+
   // Generate a random OTP
   const otp = otpGenerator.generate(4, {
     digits: true,
@@ -192,6 +196,7 @@ export const profileCompletionLaunderer = async (params) => {
     authStepsCompleted: "profile_completion",
     firstName,
     lastName,
+    name,
     phoneCode,
     phone,
     otp,
@@ -355,10 +360,9 @@ export const serviceAreaSelection = async (params) => {
     success: true,
     radius: radius,
     coordinates: coordinates,
-    zip: zip
+    zip: zip,
   };
 };
-
 
 export const w9FormSubmission = async (params) => {
   const { user, image } = params;
@@ -379,15 +383,15 @@ export const w9FormSubmission = async (params) => {
     throw new Error("Please upload filled w9 form ||| 400");
   }
 
-  console.log("laundererObj : ",laundererObj)
+  console.log("laundererObj : ", laundererObj);
 
   const updatedLaunderer = await launderersModel.findOneAndUpdate(
     { user: user },
     { w9Form: image },
     { new: true }
   );
-  
-  console.log("updatedLaunderer : ", updatedLaunderer)
+
+  console.log("updatedLaunderer : ", updatedLaunderer);
 
   const updateObj = {
     authStepsCompleted: "w9_form_submission",
@@ -401,7 +405,6 @@ export const w9FormSubmission = async (params) => {
     success: true,
   };
 };
-
 
 export const login = async (params) => {
   const { email, password } = params;

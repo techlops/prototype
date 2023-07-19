@@ -31,7 +31,9 @@ const {
   orderLogsModel,
   customerLocationsModel,
   faqModel,
-  customerComplaintsModel
+  customerComplaintsModel,
+  notificationsModel,
+  contactUsMessageModel
 } = models;
 
 // add new locations
@@ -424,10 +426,33 @@ export const cancelOrder = async (params) => {
     { $set: { status: "cancelled" } },
     { new: true }
   );
-  
 
-  // Check if the order has a launderer
-  if (!cancelledOrder) {
+  if(cancelledOrder){
+    console.log("cancel order launderer : ", cancelledOrder.launderer)
+
+    const notificationObj = {};
+
+    notificationObj.user = cancelledOrder.launderer;
+    notificationObj.step = "order_cancelled";
+    notificationObj.order = cancelledOrder.order;
+    notificationObj.status = "unread";
+
+    const notification = await notificationsModel.create(notificationObj);
+
+    const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+      { _id: cancelledOrder.launderer },
+      { $inc: { unreadNotifications: 1 } },
+      { new: true }
+    );
+
+    // notifications count emit
+    await new SocketManager().emitEvent({
+      to: cancelledOrder.launderer.toString(),
+      event: "unreadNotifications_" + cancelledOrder.launderer,
+      data: updateCustomerNotifications.unreadNotifications,
+    });
+  }
+  else if (!cancelledOrder) {
     throw new Error ("Cannot cancel a completed or already cancelled order ||| 403")
   }
 
@@ -472,6 +497,28 @@ export const feedbackSubmit = async (params) => {
 
   await orderLog.save();
 
+  const notificationObj = {};
+
+  notificationObj.user = updatedOrder.launderer;
+  notificationObj.step = "order_feedback_submitted";
+  notificationObj.order = updatedOrder.order;
+  notificationObj.status = "unread";
+
+  const notification = await notificationsModel.create(notificationObj);
+
+  const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+    { _id: updatedOrder.launderer },
+    { $inc: { unreadNotifications: 1 } },
+    { new: true }
+  );
+  
+  // notifications count emit
+  await new SocketManager().emitEvent({
+    to: updatedOrder.launderer.toString(),
+    event: "unreadNotifications_" + updatedOrder.launderer,
+    data: updateCustomerNotifications.unreadNotifications,
+  });
+
   return {
     success: true,
     customerReview: review,
@@ -479,12 +526,59 @@ export const feedbackSubmit = async (params) => {
   };
 };
 
+export const currentOrders = async (params) => {
+  const { user } = params;
+
+  console.log("hello", user)
+
+  const orders = await ordersModel.find(
+    {
+      customer: user,
+      status: { $in: ["in_progress", "pending", "upcoming"] },
+    },
+    { totalAmount: 1, status: 1, time: 1, address: 1 }
+  );
+
+  return {
+    success: true,
+    data: orders,
+  };
+};
+
+export const previousOrders = async (params) => {
+  const { user } = params;
+
+  const orders = await ordersModel.find(
+    {
+      customer: user,
+      status: { $in: ["cancelled", "completed"] },
+    },
+    { totalAmount: 1, status: 1, time: 1, address: 1 }
+  );
+
+  return {
+    success: true,
+    data: orders,
+  };
+};
+
+
 export const faq = async (params) => {
   const faq = await faqModel.find({}, { question: 1, answer: 1, _id: 0 });
 
   return {
     success: true,
     data: faq,
+  };
+};
+
+export const termsAndConditions = async (params) => {
+  const {constant} = params
+  const terms = await constantsModel.findOne({_id: constant})
+
+  return {
+    success: true,
+    data: terms,
   };
 };
 
@@ -504,3 +598,17 @@ export const reportOrder = async (params) => {
     problem: complain
   };
 };
+
+export const contactUsMessage = async (params) => {
+  const {user, text} = params
+
+  const contact = await contactUsMessageModel.create({
+    text: text,
+    user: user,
+  });
+
+  return {
+    success: true
+  };
+
+}

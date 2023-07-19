@@ -170,7 +170,7 @@ export const readNotifications = async (params) => {
   const updatedUser = await usersModel.findByIdAndUpdate(
     user,
     { unreadNotifications: 0 },
-    { new: true } // To return the updated user object
+    { new: true } 
   );
 
   return {
