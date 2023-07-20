@@ -224,10 +224,12 @@ export const sendMessage = async (params) => {
 
   // unread messages count increment
   const updateUserMessages = await usersModel.findByIdAndUpdate(
-    { _id: message.userTo },
+    message.userTo,
     { $inc: { unreadMessages: 1 } },
     { new: true }
   );
+
+  // console.log("helooo",  updateCustomerNotifications)
 
   // unread messages count socket emission
   await new SocketManager().emitEvent({
@@ -244,36 +246,38 @@ export const sendMessage = async (params) => {
     data: message
   });
 
-  // const userToExists = await usersModel.findById(message.userTo).select("fcms");
+  const userToExists = await usersModel.findById(message.userTo).select("fcms");
 
-  // const fam = userToExists.fcms
+  const fam = userToExists.fcms
 
-  // console.log("fammmmmmmmmmmmmmmmm",fam)
+  console.log("fammmmmmmmmmmmmmmmm",fam)
 
-  // const fcmArray = fam.map((item) => item.fcm);
+  const fcmArray = fam.map((item) => item.token);
 
-  // console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
 
-
-  // let fcms = []
-
-  // fcms = fcmArray;
+  // console.log("item : ", item.fcm)
 
 
-  // const title = "titleeeeeeeeee";
-  // const body = `bodyyyyyyyyyyy`;
-  // const type = NEW_MESSAGE;
+  let fcms = []
+
+  fcms = fcmArray;
 
 
-  // // firebase notification emission
-  // await new FirebaseManager().notify({
-  //   fcms,
-  //   title,
-  //   body,
-  //   data: {
-  //     type,
-  //   },
-  // });
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = NEW_MESSAGE;
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
+  });
 
 
   return { success: true, data: message };

@@ -1,14 +1,13 @@
 // module imports
 import express from "express";
 import * as usersController from "../controllers/users.js";
+import * as authController from "../controllers/auth.js";
 import * as notificationsController from "../controllers/notifications.js";
 import directories from "../configs/directories.js";
 import { upload } from "../middlewares/uploader.js";
 import { asyncHandler } from "../middlewares/async-handler.js";
 import path from "path";
-import {
-  verifyToken,
-} from "../middlewares/authenticator.js";
+import { verifyToken } from "../middlewares/authenticator.js";
 
 // destructuring assignments
 const { IMAGES_DIRECTORY } = directories;
@@ -20,13 +19,23 @@ router.get(
   "/my-profile",
   verifyToken,
   asyncHandler(async (req, res) => {
-    const  user  = req.user;
+    const user = req.user;
     const args = { user };
-    console.log("req.user : ", req.user)
+    console.log("req.user : ", req.user);
     const response = await usersController.myProfile(args);
     res.json(response);
   })
 );
+
+// router.post(
+//   "/password-reset",
+//   asyncHandler(async (req, res) => {
+//     const { email } = req.body;
+//     const args = { email };
+//     const response = await authController.emailResetPassword(args);
+//     res.json(response);
+//   })
+// );
 
 
 router.put(
@@ -40,7 +49,7 @@ router.put(
 
     // Get the uploaded image path
     const imagePath =
-    req.file && req.file.path ? path.basename(req.file.path) : null;
+      req.file && req.file.path ? path.basename(req.file.path) : null;
 
     const args = {
       firstName,
@@ -56,25 +65,21 @@ router.put(
     const response = await usersController.editProfile(args);
     res.json(response);
   })
-)
+);
 
 router.patch(
   "/set-online-status",
   verifyToken,
   asyncHandler(async (req, res) => {
-    const  user  = req.user;
-    const {toggle} = req.body
-    console.log("toggle : ", toggle)
-    console.log("user : ", user)
+    const user = req.user;
+    const { toggle } = req.body;
+    console.log("toggle : ", toggle);
+    console.log("user : ", user);
     const args = { user, toggle };
     const response = await usersController.laundererToggleSwitch(args);
     res.json(response);
   })
-)
-
-
-
-
+);
 
 // // get notifications
 // router.get(
@@ -108,12 +113,11 @@ router
   )
   .patch(
     asyncHandler(async (req, res) => {
-      const  user  = req.user;
+      const user = req.user;
       const args = { user };
       const response = await notificationsController.readNotifications(args);
       res.json(response);
     })
   );
-
 
 export default router;

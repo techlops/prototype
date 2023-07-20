@@ -338,6 +338,22 @@ router.get(
 )
 
 
+router.get(
+  "/constant",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const {constant} = req.params;
+    const args = {user, constant}
+
+    console.log("constant : ",constant)
+
+    const response = await customerController.constants(args);
+    res.json(response);
+  })
+)
+
+
 // ///////////// THESE ARE LEFT /////////////////////////////
 
 

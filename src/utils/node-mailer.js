@@ -64,6 +64,9 @@ class NodeMailer {
    */
   async sendEmail(params) {
     const { to, subject, text, html } = params;
+
+    console.log("params in sendMail : ", params)
+    console.log("html in sendMail : ", html)
     const response = await transporter.sendMail({
       from: `BACKEND BOILERPLATE <${EMAIL_USER}>`,
       to,
@@ -82,7 +85,8 @@ class NodeMailer {
    */
   getResetPasswordEmailTemplate(params) {
     const { user, token } = params;
-    const link = `${BASE_URL}reset-password/reset?user=${user}&token=${token}`;
+    const link = `${BASE_URL}reset-password?user=${user}&token=${token}`;
+    console.log (" link : ", link)
     return `
 To reset your password, click on this link 
 ${link}

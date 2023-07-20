@@ -85,12 +85,15 @@ export const editProfile = async (params) => {
     address,
   } = params;
 
+  const name = `${firstName} ${lastName}`;
+
   console.log("HELOOOOOO")
   const updateObj = {
     firstName,
     lastName,
     phoneCode,
     phone,
+    name,
     address,
   };
 

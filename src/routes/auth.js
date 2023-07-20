@@ -51,6 +51,42 @@ router.get(
   })
 );
 
+// reset password
+router.post(
+  "/password/email",
+  asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const args = { email };
+    const response = await authController.emailResetPassword(args);
+    res.json(response);
+  })
+);
+
+
+router.put(
+  "/password",
+  asyncHandler(async (req, res) => {
+    const { password, user, token } = req.body;
+    console.log("HELLO PASSWORD RESET ROUTES : ")
+    const args = { password, user, token };
+    const response = await authController.resetPassword(args);
+    res.json(response);
+  })
+);
+
+router.post(
+  "/password-reset",
+  asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const args = { email };
+    const response = await authController.emailResetPassword(args);
+    res.json(response);
+  })
+);
+
+// 
+
+
 // LAUNDERER REGISTRATION
 
 // basic registration

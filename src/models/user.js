@@ -1,5 +1,7 @@
 // module imports
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
+
 // file imports
 import { GEO_JSON_TYPES, AUTH_STEPS } from "../configs/enums.js";
 
@@ -168,5 +170,9 @@ const userSchema = new Schema(
     timestamps: true,
   }
 );
+
+userSchema.methods.getSignedjwtToken = function () {
+  return jwt.sign({ _id: this._id, type: this.type }, process.env.JWT_SECRET);
+};
 
 export default model("users", userSchema);

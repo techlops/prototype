@@ -2,10 +2,12 @@ import models from "../models/index.js";
 import bcrypt from "bcryptjs";
 import otpGenerator from "otp-generator";
 import { isValidObjectId, Types } from "mongoose";
+import FirebaseManager from "../utils/firebase-manager.js";
 import SocketManager from "../utils/socket-manager.js";
 // import { getUserDetails } from "./launderer.js";
 import { getToken } from "../middlewares/authenticator.js";
 import mongoose from "mongoose";
+import launderer from "../models/launderer.js";
 
 const { ObjectId } = Types;
 
@@ -256,7 +258,7 @@ export const laundererOrderRequestAccept = async (params) => {
     const notification = await notificationsModel.create(notificationObj);
 
     const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-      { _id: updatedOrder.customer },
+      updatedOrder.customer,
       { $inc: { unreadNotifications: 1 } },
       { new: true }
     );
@@ -268,9 +270,43 @@ export const laundererOrderRequestAccept = async (params) => {
     // notifications count emit
     await new SocketManager().emitEvent({
       to: updatedOrder.customer.toString(),
-      event: "unreadNotifications_" + updatedOrder.customer,
+      event: "unreadNotifications",
       data: updateCustomerNotifications.unreadNotifications,
     });
+
+    
+  const userToExists = await usersModel.findById(updatedOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = NEW_MESSAGE;
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
+  });
 
     return {
       success: true,
@@ -322,7 +358,7 @@ export const startService = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.customer },
+    updatedOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -334,8 +370,41 @@ export const startService = async (params) => {
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "unreadNotifications_" + updatedOrder.customer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+  const userToExists = await usersModel.findById(updatedOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'NEW_MESSAGE';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -386,7 +455,7 @@ export const laundererOnWay = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.customer },
+    updatedOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -398,7 +467,7 @@ export const laundererOnWay = async (params) => {
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "user_" + updatedOrder.customer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
   });
 
@@ -450,7 +519,7 @@ export const laundererReachedLocation = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.customer },
+    updatedOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -462,8 +531,41 @@ export const laundererReachedLocation = async (params) => {
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "unreadNotifications_" + updatedOrder.customer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+  const userToExists = await usersModel.findById(updatedOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'NEW_MESSAGE';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -525,7 +627,7 @@ export const pickupLocationSelect = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updateOrder.customer },
+    updateOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -536,9 +638,42 @@ export const pickupLocationSelect = async (params) => {
   );
   // notifications count emit
   await new SocketManager().emitEvent({
-    to: updatedOrder.customer.toString(),
-    event: "unreadNotifications_" + updateOrder.customer,
+    to: updateOrder.customer.toString(),
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+  const userToExists = await usersModel.findById(updateOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'NEW_MESSAGE';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -587,7 +722,7 @@ export const clothesInWasher = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.customer },
+    updatedOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -599,8 +734,42 @@ export const clothesInWasher = async (params) => {
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "unreadNotifications_" + updatedOrder.customer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+
+  const userToExists = await usersModel.findById(updatedOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'NEW_MESSAGE';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -649,7 +818,7 @@ export const clothesInDryer = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.customer },
+    updatedOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -661,8 +830,42 @@ export const clothesInDryer = async (params) => {
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "unreadNotifications_" + updatedOrder.customer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+
+  const userToExists = await usersModel.findById(updatedOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'NEW_MESSAGE';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -711,7 +914,7 @@ export const clothesFolding = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.customer },
+    updatedOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -723,8 +926,42 @@ export const clothesFolding = async (params) => {
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "unreadNotifications_" + updatedOrder.customer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+
+  const userToExists = await usersModel.findById(updatedOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'NEW_MESSAGE';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -773,7 +1010,7 @@ export const clothesDelivery = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.customer },
+    updatedOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -785,8 +1022,42 @@ export const clothesDelivery = async (params) => {
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "unreadNotifications_" + updatedOrder.customer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+
+  const userToExists = await usersModel.findById(updatedOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'NEW_MESSAGE';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -850,7 +1121,7 @@ export const submitWork = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.customer },
+    updatedOrder.customer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
@@ -862,8 +1133,42 @@ export const submitWork = async (params) => {
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.customer.toString(),
-    event: "unreadNotifications_" + updatedOrder.customer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+
+  const userToExists = await usersModel.findById(updatedOrder.customer).select("fcms");
+
+  const fam = userToExists.fcms
+
+  console.log("fammmmmmmmmmmmmmmmm",fam)
+
+  const fcmArray = fam.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  // console.log("item : ", item.fcm)
+
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'NEW_MESSAGE';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -1168,7 +1473,7 @@ export const laundererDetails = async (params) => {
           _id: "$_id",
         },
         avgRating: { $avg: "$launderers.avgRating" },
-        ratingsCount: { $sum: "$launderers.ratingsCount" },
+        // ratingsCount: { $sum: "$launderers.ratingsCount" },
         recievedOrders: { $size: "$orders" }, // Count the size of the orders array
         completedOrders: {
           $size: {
@@ -1207,47 +1512,66 @@ export const laundererDetails = async (params) => {
   return userDetails; // Return the first (and only) result
 };
 
+
 export const updateRealTimeLocation = async (params) => {
-  const { country, state, city, zip, coordinates, address, user, order } = params;
+  const { coordinates,  user, order } = params;
 
-  const orderCustomer = await ordersModel.findOne({_id: order})
+  // const updateObj = {};
 
-  const updateObj = {
-    state,
-    city,
-    country,
-    zip,
-    address,
-  };
+  // if (coordinates) {
+  //   updateObj.location = {
+  //     coordinates: coordinates,
+  //   };
+  // }
+  
+  // console.log("updateObj : ", updateObj);
+  
+  // const profileUpdate = await launderersModel.findOneAndUpdate(
+  //   { user },
+  //   updateObj,
+  //   { new: true }
+  // );
 
-  if (coordinates) {
-    updateObj.location = {
-      coordinates: coordinates,
-    };
+  // console.log("profile update : ", profileUpdate);
+
+  if(order){
+    const orderCustomer = await ordersModel.findOne({_id: order})
+    if(!orderCustomer){
+      throw new Error("invalid order ||| 400")
+    }
+    await new SocketManager().emitEvent({
+      to: orderCustomer.customer.toString(),
+      event: "laundererCoordinates_" + order,
+      data: coordinates,
+    });
   }
-
-  const profileUpdate = await launderersModel.findOneAndUpdate({_id: user}, updateObj, {
-    new: true,
-  });
-
-  await new SocketManager().emitEvent({
-    to: orderCustomer.customer.toString(),
-    event: "laundererCoordinates_" + orderCustomer.customer,
-    data: coordinates,
-  });
-
-  console.log("profile update : ", profileUpdate);
+  else{
+    throw new Error ("'Enter order ID|||400")
+  }
 
   return {
     success: true,
     data: {
       coordinates,
-      state,
-      city,
-      country,
-      zip,
-      address,
     },
   };
 
 };
+
+export const laundererReviews = async (params) => {
+  const { user } = params;
+
+  // Step 1: Find all orders where launderer is the specified user and substatus is feedback_submitted
+  const reviews = await ordersModel.find({
+    launderer: user,
+    subStatus: "feedback_submitted",
+  })
+  .select("customerReview")
+  .populate("customer", "name");
+
+  return {
+    success: true,
+    reviews: reviews,
+  };
+};
+

@@ -169,6 +169,11 @@ const orderSchema = new Schema(
       type: Number,
       index: true
     },
+    laundererTotal: {
+      type: Number,
+      default: 0,
+      required: true,
+    },
     laundererFeedback: {
       type: String,
       index: true,

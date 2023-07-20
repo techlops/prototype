@@ -20,6 +20,20 @@ const router = express.Router();
 // 3. launderer online / offline switch
 
 
+router.get(
+  "/reviews",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    console.log("req.user : ", user);
+    const args = { user };
+
+    const response = await laundererController.laundererReviews(args);
+    res.json(response);
+  })
+)
+
+
 
 // View nearby order requests
 router.get(
@@ -141,6 +155,24 @@ router.patch(
     res.json(response);
   })
 );
+
+
+// clothesInWasher
+router.patch(
+  "/clothes-in-washer/:order",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+    const { order } = req.params;
+
+    const args = { user, order };
+
+    const response = await laundererController.clothesInWasher(args);
+
+    res.json(response);
+  })
+);
+
 
 // clothes in dryer
 router.patch(
@@ -315,29 +347,28 @@ router.get(
   "/my-launderer",
   verifyToken,
   asyncHandler(async (req, res) => {
-    const { user } = req.user
+    const user  = req.user
     const args = { user };
+
+    console.log("user::::::::::: ", user)
     const response = await laundererController.laundererDetails(args);
     res.json(response);
   })
 );
 
-router.post(
-  "/launderer/update-order-location",
+router.put(
+  "/update-location",
   verifyToken,
   asyncHandler(async (req, res) => {
     const user = req.user;
-    const { order } = req.params;
-    const { country, state, city, zip, coordinates, address } = req.body;
+    const { order } = req.query;
+    const { coordinates } = req.body;
+
+    console.log(" order : ", order)
 
     const args = {
-      country,
-      state,
-      city,
-      zip,
-      coordinates,
-      address,
       user,
+      coordinates,
       order
     };
 

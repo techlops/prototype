@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import otpGenerator from "otp-generator";
 import { isValidObjectId, Types } from "mongoose";
 import SocketManager from "../utils/socket-manager.js";
+import FirebaseManager from "../utils/firebase-manager.js";
 import { getToken } from "../middlewares/authenticator.js";
 import mongoose from "mongoose";
 // file imports
@@ -33,7 +34,7 @@ const {
   faqModel,
   customerComplaintsModel,
   notificationsModel,
-  contactUsMessageModel
+  contactUsMessageModel,
 } = models;
 
 // add new locations
@@ -376,20 +377,21 @@ export const requestServiceOrder = async (params) => {
   await orderBagsModel.updateMany({ _id: { $in: bags } }, { order: order._id });
   const radius = 20;
 
-  const usersWithinRadius = await usersModel.find(
-    {
-      customLocation: {
-        $geoWithin: {
-          $centerSphere: [coordinates, radius / 3963.2], // radius in miles divided by the Earth's radius in miles (3963.2 miles)
-        },
-      },
-      isLaunderer: true,
-    },
-    { _id: 1 } // Projection to return only the _id field
-  );
+  const nearbyLaunderer = await launderersModel.find({});
 
-  for (const user of usersWithinRadius) {
-    console.log("launderers within 20 miles ", user);
+  const dataToSend = {
+    address: order.address,
+    time: order.time,
+  };
+
+
+  for (const index of nearbyLaunderer) {
+    console.log("launderer user : ", index.user);
+    await new SocketManager().emitEvent({
+      to: index.user.toString(),
+      event: "newOrderRequest",
+      data: dataToSend,
+    });
   }
 
   return {
@@ -400,17 +402,17 @@ export const requestServiceOrder = async (params) => {
 // track your order
 export const trackOrder = async (params) => {
   const { order, user } = params;
-    // Find the order and fetch the status
-    const trackedOrder = await ordersModel.findById(order, "status");
+  // Find the order and fetch the status
+  const trackedOrder = await ordersModel.findById(order, "status");
 
-    if (!trackedOrder) {
-      throw new Error("Order not found ||| 400");
-    }
+  if (!trackedOrder) {
+    throw new Error("Order not found ||| 400");
+  }
 
-    return {
-      success: true,
-      data: trackedOrder.status,
-    };
+  return {
+    success: true,
+    data: trackedOrder.status,
+  };
 };
 
 // cancel order
@@ -421,40 +423,75 @@ export const cancelOrder = async (params) => {
   const cancelledOrder = await ordersModel.findOneAndUpdate(
     {
       _id: order,
-      status: { $nin: ["completed", "cancelled"] }
+      status: { $nin: ["completed", "cancelled"] },
     },
     { $set: { status: "cancelled" } },
     { new: true }
   );
 
-  if(cancelledOrder){
-    console.log("cancel order launderer : ", cancelledOrder.launderer)
-
-    const notificationObj = {};
-
-    notificationObj.user = cancelledOrder.launderer;
-    notificationObj.step = "order_cancelled";
-    notificationObj.order = cancelledOrder.order;
-    notificationObj.status = "unread";
-
-    const notification = await notificationsModel.create(notificationObj);
-
-    const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-      { _id: cancelledOrder.launderer },
-      { $inc: { unreadNotifications: 1 } },
-      { new: true }
-    );
-
-    // notifications count emit
-    await new SocketManager().emitEvent({
-      to: cancelledOrder.launderer.toString(),
-      event: "unreadNotifications_" + cancelledOrder.launderer,
-      data: updateCustomerNotifications.unreadNotifications,
+  if (cancelledOrder) {
+    await new SocketManager().emitGroupEvent({
+      event: "orderRequestCancel_" + order,
+      data: cancelledOrder.status,
     });
+
+    if (cancelledOrder.launderer) {
+
+      const notificationObj = {};
+
+      notificationObj.user = cancelledOrder.launderer;
+      notificationObj.step = "order_cancelled";
+      notificationObj.order = cancelledOrder.order;
+      notificationObj.status = "unread";
+
+      const notification = await notificationsModel.create(notificationObj);
+
+      const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
+        cancelledOrder.launderer,
+        { $inc: { unreadNotifications: 1 } },
+        { new: true }
+      );
+
+      console.log("update : ", updateCustomerNotifications)
+
+      // notifications count emit to launderer
+      await new SocketManager().emitEvent({
+        to: cancelledOrder.launderer.toString(),
+        event: "unreadNotifications",
+        data: updateCustomerNotifications.unreadNotifications,
+      });
+    }
+  } else if (!cancelledOrder) {
+    throw new Error(
+      "Cannot cancel a completed or already cancelled order ||| 403"
+    );
   }
-  else if (!cancelledOrder) {
-    throw new Error ("Cannot cancel a completed or already cancelled order ||| 403")
-  }
+
+  const userToExists = await usersModel.findById(cancelledOrder.launderer).select("fcms");
+
+  const fcmArray = userToExists.fcms.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'hello';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
+  });
 
   return {
     success: true,
@@ -477,15 +514,70 @@ export const feedbackSubmit = async (params) => {
     );
   }
 
+  let laundererTotal = 0;
+  laundererTotal = tip + checkOrder.totalAmount
+
+
+  
+
   // Update the order status to 'confirmed' and assign the launderer
   const updatedOrder = await ordersModel.findByIdAndUpdate(order, {
     subStatus: "feedback_submitted",
     status: "completed",
+    laundererTotal: laundererTotal,
     customerReview: review,
     customerRating: rating,
     isTipped: true,
     tipAmount: tip,
   });
+
+
+  const launderer = updatedOrder.launderer
+
+  console.log("launderer : ", launderer)
+
+  
+  // Step 1: Find all feedback_submitted orders for the launderer and count them
+  const totalRatings = await ordersModel.countDocuments({
+    launderer: launderer,
+    subStatus: "feedback_submitted",
+  });
+
+  console.log (" total feedbacks :", totalRatings)
+
+  // Step 2: Increment totalRatings by 1
+  const totalRatingsWithNewRating = totalRatings + 1;
+
+  // Step 3: Fetch all feedback_submitted orders and their customerRating
+  const feedbackOrders = await ordersModel.find(
+    {
+      launderer: launderer,
+      subStatus: "feedback_submitted",
+    },
+    { customerRating: 1 }
+  );
+
+  // Step 4: Calculate the total sum of customerRatings
+  const totalCustomerRatings = feedbackOrders.reduce(
+    (acc, order) => acc + order.customerRating,
+    0
+  );
+
+  // Step 5: Add the new rating to the total sum of customerRatings
+  const newTotalCustomerRatings = totalCustomerRatings + rating;
+
+  // Step 6: Calculate the average rating
+  const averageRating = newTotalCustomerRatings / totalRatingsWithNewRating;
+
+  console.log("final avg rating : ", averageRating)
+
+  const laundererRatingUpdate = await launderersModel.findOneAndUpdate(
+    { user: launderer },
+    { avgRating: averageRating },
+    { new: true }
+  );
+
+  console.log("laundererRatingUpdate : ", laundererRatingUpdate)
 
   const orderLog = new orderLogsModel({
     order: order,
@@ -507,16 +599,48 @@ export const feedbackSubmit = async (params) => {
   const notification = await notificationsModel.create(notificationObj);
 
   const updateCustomerNotifications = await usersModel.findByIdAndUpdate(
-    { _id: updatedOrder.launderer },
+     updatedOrder.launderer,
     { $inc: { unreadNotifications: 1 } },
     { new: true }
   );
-  
+
   // notifications count emit
   await new SocketManager().emitEvent({
     to: updatedOrder.launderer.toString(),
-    event: "unreadNotifications_" + updatedOrder.launderer,
+    event: "unreadNotifications",
     data: updateCustomerNotifications.unreadNotifications,
+  });
+
+  await new SocketManager().emitEvent({
+    to: updatedOrder.launderer.toString(),
+    event: "feedbackSubmit_" + order,
+    data: review,
+  });
+
+  const userToExists = await usersModel.findById(updatedOrder.launderer).select("fcms");
+
+  const fcmArray = userToExists.fcms.map((item) => item.token);
+
+  console.log("fcmArrayyyyyyyyyyyyyyyyyyyyyyy",fcmArray)
+
+  let fcms = []
+
+  fcms = fcmArray;
+
+
+  const title = "titleeeeeeeeee";
+  const body = `bodyyyyyyyyyyy`;
+  const type = 'hello';
+
+
+  // firebase notification emission
+  await new FirebaseManager().notify({
+    fcms,
+    title,
+    body,
+    data: {
+      type,
+    },
   });
 
   return {
@@ -529,7 +653,7 @@ export const feedbackSubmit = async (params) => {
 export const currentOrders = async (params) => {
   const { user } = params;
 
-  console.log("hello", user)
+  console.log("hello", user);
 
   const orders = await ordersModel.find(
     {
@@ -562,7 +686,6 @@ export const previousOrders = async (params) => {
   };
 };
 
-
 export const faq = async (params) => {
   const faq = await faqModel.find({}, { question: 1, answer: 1, _id: 0 });
 
@@ -573,8 +696,8 @@ export const faq = async (params) => {
 };
 
 export const termsAndConditions = async (params) => {
-  const {constant} = params
-  const terms = await constantsModel.findOne({_id: constant})
+  const { constant } = params;
+  const terms = await constantsModel.findOne({ _id: constant });
 
   return {
     success: true,
@@ -582,25 +705,33 @@ export const termsAndConditions = async (params) => {
   };
 };
 
+export const constants = async (params) => {
+  const { constant } = params;
+  const constants = await constantsModel.find({});
+
+  return {
+    success: true,
+    data: constants,
+  };
+};
 
 export const reportOrder = async (params) => {
-
-  const{order, user, complain} = params;
+  const { order, user, complain } = params;
 
   const report = await customerComplaintsModel.create({
     customer: user,
     order: order,
-    problem: complain
+    problem: complain,
   });
 
   return {
     success: true,
-    problem: complain
+    problem: complain,
   };
 };
 
 export const contactUsMessage = async (params) => {
-  const {user, text} = params
+  const { user, text } = params;
 
   const contact = await contactUsMessageModel.create({
     text: text,
@@ -608,7 +739,6 @@ export const contactUsMessage = async (params) => {
   });
 
   return {
-    success: true
+    success: true,
   };
-
-}
+};

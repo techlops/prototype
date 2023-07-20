@@ -15,6 +15,7 @@ import notifications from "./notifications.js";
 import services from "./services.js";
 import faq from "./faq.js";
 import customerComplaints from "./customer-complaints.js";
+import userTokens from "./user-tokens.js";
 
 export default {
   bagSizesModel: bagSizes,
@@ -33,6 +34,7 @@ export default {
   notificationsModel: notifications,
   servicesModel: services,
   faqModel: faq,
-  customerComplaintsModel: customerComplaints
+  customerComplaintsModel: customerComplaints,
+  userTokensModel: userTokens
 };
 

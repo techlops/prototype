@@ -7,10 +7,84 @@ import { getToken } from "../middlewares/authenticator.js";
 
 const { ObjectId } = Types;
 
+import NodeMailer from "../utils/node-mailer.js";
+import { USER_TYPES, USER_STATUSES } from "../configs/enums.js";
+
+// destructuring assignments
+
 // import  TwilioManager from "../utils/twilio-manager.js";
 
 // importing models
-const { usersModel, launderersModel } = models;
+const { usersModel, launderersModel, userTokensModel } = models;
+
+
+const { CUSTOMER, ADMIN } = USER_TYPES;
+const { ACTIVE } = USER_STATUSES;
+const {
+  sendEmail,
+  getEmailVerificationEmailTemplate,
+  getResetPasswordEmailTemplate,
+  getWelcomeUserEmailTemplate,
+} = new NodeMailer();
+
+
+
+export const generateEmailToken = async (params) => {
+  const { email, tokenExpirationTime } = params;
+  const userExists = await usersModel.findOne({ email: email });
+  console.log("hello 0")
+
+  if (userExists) {
+    console.log("hello 1")
+    let userTokenExists = await userTokensModel.findOne({
+      user: userExists._id,
+    });
+    if (!userTokenExists) {
+    console.log("hello 2")
+      const userTokenObj = {};
+      userTokenObj.user = userExists._id;
+      userTokenObj.token = userExists.getSignedjwtToken();
+    console.log("hello 3")
+      userTokenObj.expireAt = tokenExpirationTime;
+      const UserTokensModel = userTokensModel;
+      userTokenExists = await new UserTokensModel(userTokenObj).save();
+    }
+    return {
+      success: true,
+      data: userTokenExists,
+    };
+  } else {
+    throw new Error("User with given email doesn't exist!|||404");
+  }
+};
+
+
+
+
+export const emailResetPassword = async (params) => {
+  const { email } = params;
+  const tokenExpirationTime = new Date();
+  tokenExpirationTime.setMinutes(tokenExpirationTime.getMinutes() + 10);
+  const emailTokenResponse = await generateEmailToken({
+    email,
+    tokenExpirationTime,
+  });
+  console.log("emailTokenResponse : ", emailTokenResponse)
+  const { user, token } = emailTokenResponse?.data;
+  const args = {};
+  args.to = email;
+  args.subject = "Password reset";
+  args.text = getResetPasswordEmailTemplate({ user, token });
+  console.log("hello 4")
+  await sendEmail(args);
+  console.log("hello 5")
+  return {
+    success: true,
+    message: "Password reset link sent to your email address!",
+  };
+};
+
+
 
 // CUSTOMER
 
@@ -404,6 +478,29 @@ export const w9FormSubmission = async (params) => {
   return {
     success: true,
   };
+};
+
+
+export const resetPassword = async (params) => {
+  const { password, user, token } = params;
+
+  console.log ("PARAMS OF resetPassword  : ", params)
+
+  const userExists = await usersModel.findById(user);
+  if (userExists);
+  else throw new Error("Invalid link!|||400");
+
+  const userTokenExists = await userTokensModel.findOne({
+    user,
+    token,
+  });
+  if (userTokenExists);
+  else throw new Error("Invalid or expired link!|||400");
+
+  await userExists.setPassword(password);
+  await userTokenExists.delete();
+
+  return { success: true, message: "Password reset successfully!" };
 };
 
 export const login = async (params) => {

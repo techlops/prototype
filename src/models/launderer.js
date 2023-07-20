@@ -2,7 +2,12 @@
 import mongoose from "mongoose";
 
 // file imports
-import { GEO_JSON_TYPES } from "../configs/enums.js";
+import {
+  ORDER_STATUSES,
+  GEO_JSON_TYPES,
+  PICKUP_LOCATION_TYPES,
+  MAIN_STATUSESORDER
+} from "../configs/enums.js";
 
 // destructuring assignments
 const { POINT } = GEO_JSON_TYPES;
@@ -74,14 +79,26 @@ const laundererSchema = new Schema(
       type: String,
       trim: true,
     },
-    coordinates: {
-      type: [Number],
-      default: [0, 0],
-      required: true,
+    location: {
+      type: {
+        type: String,
+        enum: [POINT],
+        default: POINT,
+        required: true,
+      },
+      coordinates: {
+        type: [Number],
+        default: [0, 0],
+        required: true,
+      },
     },
   },
   {
     timestamps: true,
   }
 );
+
+// laundererSchema.index({ location: "2dsphere" });
+
+
 export default model("launderers", laundererSchema);

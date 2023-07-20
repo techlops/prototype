@@ -27,10 +27,10 @@ const { CUSTOMER, ADMIN, SUPER_ADMIN } = USER_TYPES;
  * @param {string | boolean } variable any variable
  * @returns {Object} JWT token
  */
-export const getToken = function (user, otp) {
+export const getToken = function (user) {
 
 
-  return jwt.sign({ id: user, otp: otp }, process.env.JWT_SECRET);
+  return jwt.sign({ id: user}, process.env.JWT_SECRET);
 };
 
 export const verifyToken = async (
