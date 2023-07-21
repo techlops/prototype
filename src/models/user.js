@@ -27,16 +27,6 @@ const fcm = {
   select: false,
 };
 
-const ImageSchema = new Schema(
-  {
-    path: {
-      type: String,
-      required: true,
-    },
-  },
-  { timestamps: true }
-);
-
 const userSchema = new Schema(
   {
     email: {
@@ -101,7 +91,10 @@ const userSchema = new Schema(
       type: String,
       trim: true,
     },
-    image: ImageSchema,
+    image:{
+      type: String,
+      trim: true,
+    },
     fcms: [fcm],
     location: {
       type: {

@@ -31,7 +31,6 @@ export const myProfile = async (params) => {
       email: 1,
       authStepsCompleted: 1,
       isOnline: 1,
-      token: 1,
       address: 1,
       city: 1,
       country: 1,
@@ -48,7 +47,7 @@ export const myProfile = async (params) => {
   if (userExists) {
     return {
       success: true,
-      userExists,
+      data: userExists,
     };
   }
 };
